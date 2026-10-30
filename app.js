@@ -764,15 +764,37 @@ async function loadAdmin() {
     });
 
     document.querySelectorAll('.suspend').forEach(b => {
-      b.onclick = async () => {
-        await updateDoc(doc(db, 'users', b.dataset.uid), {
-          status: b.dataset.status === 'suspended'
-            ? 'active'
-            : 'suspended'
-        });
-        await loadAdmin();
-      };
-    });
+  b.onclick = async () => {
+    const reactivar = b.dataset.status === 'suspended';
+    const accion = reactivar ? 'reactivar' : 'suspender';
+
+    const tarjeta = b.closest('.card');
+    const correo = tarjeta?.textContent
+      .split(' · ')[0]
+      .trim() || 'este usuario';
+
+    const confirmado = confirm(
+      `¿Estás seguro de que deseas ${accion} la cuenta de ${correo}?`
+    );
+
+    if (!confirmado) return;
+
+    b.disabled = true;
+
+    try {
+      await updateDoc(doc(db, 'users', b.dataset.uid), {
+        status: reactivar ? 'active' : 'suspended'
+      });
+
+      msg(`Cuenta ${reactivar ? 'reactivada' : 'suspendida'} correctamente.`);
+      await loadAdmin();
+
+    } catch (error) {
+      msg('No se pudo actualizar la cuenta: ' + error.message);
+      b.disabled = false;
+    }
+  };
+});
 
   } catch (e) {
     msg('Error administrativo: ' + e.message);

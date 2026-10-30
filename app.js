@@ -705,7 +705,80 @@ $('editProspectForm').onsubmit=async e=>{
 };
 function csv(available){const rows=properties.filter(p=>!p.archived&&(!available||p.status==='Disponible'));const headers=['ID','Título','Municipio','Colonia','Precio MXN','Habitaciones','Baños','Tipo','Formas de pago','Reembolso %','Estatus'];const data=[headers,...rows.map(p=>[p.id,p.title,p.municipality,p.colony,p.price,p.beds,p.baths,p.propertyType,(p.payments||[]).join(' / '),p.reimbursementPercent||'N/A',p.status])];const val=x=>'"'+String(x??'').replace(/^[=+@\-\t\r]/,'\'$&').replace(/"/g,'""')+'"';const content='\ufeff'+data.map(row=>row.map(val).join(';')).join('\r\n');const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='HABITA_NL_'+(available?'Disponibles':'Todas')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 $('exportAvailable').onclick=()=>csv(true);$('exportAll').onclick=()=>csv(false);
-async function loadAdmin(){if(profile?.role!=='admin')return;try{const [rs,us]=await Promise.all([getDocs(collection(db,'requests')),getDocs(collection(db,'users'))]);$('requestRows').innerHTML=rs.docs.map(s=>{const r=s.data();return `<div class="card"><strong>${escape(r.email)}</strong> · ${escape(r.status)} <button data-uid="${escape(s.id)}" data-email="${escape(r.email)}" class="approve">Aprobar como asesor</button><button data-uid="${escape(s.id)}" class="reject secondary">Rechazar</button></div>`}).join('')||'Sin solicitudes';$('userRows').innerHTML=us.docs.map(s=>{const u=s.data();return `<div class="card">${escape(u.email)} · ${escape(u.role)} · ${escape(u.status)} ${s.id!==current.uid?`<button class="suspend secondary" data-uid="${escape(s.id)}" data-status="${escape(u.status)}">${u.status==='suspended'?'Reactivar':'Suspender'}</button>`:''}</div>`}).join('');document.querySelectorAll('.approve').forEach(b=>b.onclick=()=>approve(b.dataset.uid,b.dataset.email));document.querySelectorAll('.reject').forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,'requests',b.dataset.uid),{status:'rejected'});await loadAdmin()});document.querySelectorAll('.suspend').forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,'users',b.dataset.uid),{status:b.dataset.status==='suspended'?'active':'suspended'});await loadAdmin()})}catch(e){msg('Error administrativo: '+e.message)}}
+
+async function loadAdmin() {
+  if (profile?.role !== 'admin') return;
+
+  try {
+    const [rs, us] = await Promise.all([
+      getDocs(collection(db, 'requests')),
+      getDocs(collection(db, 'users'))
+    ]);
+
+    $('requestRows').innerHTML = rs.docs.map(s => {
+      const r = s.data();
+
+      const actions = r.status === 'pending'
+        ? `<button data-uid="${escape(s.id)}" data-email="${escape(r.email)}" class="approve">Aprobar como asesor</button>
+           <button data-uid="${escape(s.id)}" class="reject secondary">Rechazar</button>`
+        : r.status === 'approved'
+          ? '<span> · Solicitud aprobada</span>'
+          : r.status === 'rejected'
+            ? '<span> · Solicitud rechazada</span>'
+            : '<span> · Sin acciones disponibles</span>';
+
+      return `<div class="card">
+        <strong>${escape(r.email)}</strong> · ${escape(r.status)}
+        ${actions}
+      </div>`;
+    }).join('') || 'Sin solicitudes';
+
+    $('userRows').innerHTML = us.docs.map(s => {
+      const u = s.data();
+
+      const action = s.id !== current.uid
+        ? `<button class="suspend secondary"
+             data-uid="${escape(s.id)}"
+             data-status="${escape(u.status)}">
+             ${u.status === 'suspended' ? 'Reactivar' : 'Suspender'}
+           </button>`
+        : '';
+
+      return `<div class="card">
+        ${escape(u.email)} · ${escape(u.role)} · ${escape(u.status)}
+        ${action}
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('.approve').forEach(b => {
+      b.onclick = () => approve(b.dataset.uid, b.dataset.email);
+    });
+
+    document.querySelectorAll('.reject').forEach(b => {
+      b.onclick = async () => {
+        await updateDoc(doc(db, 'requests', b.dataset.uid), {
+          status: 'rejected'
+        });
+        await loadAdmin();
+      };
+    });
+
+    document.querySelectorAll('.suspend').forEach(b => {
+      b.onclick = async () => {
+        await updateDoc(doc(db, 'users', b.dataset.uid), {
+          status: b.dataset.status === 'suspended'
+            ? 'active'
+            : 'suspended'
+        });
+        await loadAdmin();
+      };
+    });
+
+  } catch (e) {
+    msg('Error administrativo: ' + e.message);
+  }
+}
+
 async function approve(uid,email){try{await setDoc(doc(db,'users',uid),{email,role:'advisor',status:'active',approvedBy:current.uid,updatedAt:serverTimestamp()});await updateDoc(doc(db,'requests',uid),{status:'approved'});msg('Asesor autorizado');await loadAdmin()}catch(e){msg('Error al aprobar: '+e.message)}}
 $('inviteButton').onclick=async()=>{const email=$('inviteEmail').value.trim().toLowerCase(),role=$('inviteRole').value;if(!email)return msg('Escribe un correo válido');try{await setDoc(doc(db,'invitations',email),{email,role,status:'pending',createdBy:current.uid,createdAt:serverTimestamp()});msg('Invitación registrada. El asesor debe ingresar y solicitar acceso; el administrador aprobará su cuenta al aparecer la solicitud.');}catch(e){msg('Error al invitar: '+e.message)}};
 

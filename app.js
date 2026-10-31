@@ -704,10 +704,42 @@ function validPropertyLocation(form){
   return true;
 }
 for(const id of locationForms)bindLocationForm($(id));
-fetch('./ubicaciones-sepomex.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(c=>{
-  if(c&&typeof c==='object'&&!Array.isArray(c))locationCatalog=c;
-  for(const id of locationForms)$(id)._locationRefresh?.();
-}).catch(()=>{ /* El formulario mantiene captura manual si falta el archivo opcional */ });
+// Catálogo personal SEPOMEX: importación local, sin publicar ni enviar el dataset.
+const sepomexInput=document.getElementById('sepomexLocalFile');
+const sepomexStatus=document.getElementById('sepomexLocalStatus');
+const sepomexStateAliases={'coahuila':'Coahuila de Zaragoza','michoacan':'Michoacán de Ocampo','estado de mexico':'México','veracruz':'Veracruz de Ignacio de la Llave'};
+function properState(raw){
+  let k=normalizeLocation(raw); if(sepomexStateAliases[k])return sepomexStateAliases[k];
+  return mexicanStates.find(s=>normalizeLocation(s)===k)||null;
+}
+function openSepomexDB(){return new Promise((resolve,reject)=>{if(!('indexedDB' in window)){reject(new Error('IndexedDB no disponible'));return;} const req=indexedDB.open('HABITA_NL_CatalogoPersonal',1);req.onupgradeneeded=()=>req.result.createObjectStore('catalog');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+async function saveSepomexLocal(catalog){const db=await openSepomexDB();await new Promise((resolve,reject)=>{let tx=db.transaction('catalog','readwrite');tx.objectStore('catalog').put(catalog,'sepomex');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();}
+async function loadSepomexLocal(){const db=await openSepomexDB();const result=await new Promise((resolve,reject)=>{const tx=db.transaction('catalog','readonly');const req=tx.objectStore('catalog').get('sepomex');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});db.close();return result;}
+function applySepomexLocal(catalog){locationCatalog=catalog;for(const id of locationForms)$(id)._locationRefresh?.();}
+if(sepomexInput)sepomexInput.addEventListener('change',async()=>{
+  const file=sepomexInput.files?.[0];if(!file)return;
+  if(file.size>30*1024*1024){sepomexStatus.textContent='Archivo demasiado grande (máximo 30 MB).';return;}
+  sepomexStatus.textContent='Leyendo catálogo local…';
+  try{
+    const buffer=await file.arrayBuffer(); const data=new TextDecoder('windows-1252').decode(buffer);
+    const lines=data.split(/\r?\n/); const headIndex=lines.findIndex(x=>x.startsWith('d_codigo|d_asenta|'));
+    if(headIndex<0)throw new Error('No se encontró el encabezado SEPOMEX esperado.');
+    const catalog=Object.create(null);let count=0;
+    for(let i=headIndex+1;i<lines.length;i++){
+      const p=lines[i].split('|');if(p.length<5)continue;
+      const state=properState(p[4]),mun=p[3]?.trim(),col=p[1]?.trim(),zip=p[0]?.trim();
+      if(!state||!mun||!col||!/^\d{5}$/.test(zip))continue;
+      const cities=catalog[state]||(catalog[state]=Object.create(null));
+      const colonies=cities[mun]||(cities[mun]=Object.create(null));
+      const codes=colonies[col]||(colonies[col]=[]);if(!codes.includes(zip))codes.push(zip);count++;
+    }
+    if(count<100000||Object.keys(catalog).length!==32)throw new Error('El archivo parece incompleto; no se importó.');
+    await saveSepomexLocal(catalog);applySepomexLocal(catalog);
+    sepomexStatus.textContent=`Catálogo local activo: ${count.toLocaleString('es-MX')} asentamientos de ${Object.keys(catalog).length} estados. Se conservará en este navegador.`;
+  }catch(err){sepomexStatus.textContent='No se pudo importar el catálogo: '+err.message;}
+});
+loadSepomexLocal().then(c=>{if(c){applySepomexLocal(c);if(sepomexStatus)sepomexStatus.textContent='Catálogo local recuperado. Municipio y colonia disponibles.';}}).catch(()=>{if(sepomexStatus)sepomexStatus.textContent='Sin catálogo local; selecciona el TXT para habilitar las listas.';});
+
 
 $('propertyForm').onsubmit=async e=>{e.preventDefault();if(profile?.role!=='admin')return msg('Acceso denegado: solo el administrador puede registrar propiedades.');const f=e.target,d=Object.fromEntries(new FormData(f)),payments=[...f.querySelectorAll('[name=payment]:checked')].map(x=>x.value);if(!payments.length)return msg('Selecciona al menos una forma de pago');if(!validPropertyLocation(f))return;const warning=propertyDuplicateText(d);if(warning&&!confirm(warning+'\n\n¿Deseas continuar de todos modos?'))return;try{await addDoc(collection(db,'properties'),{...d,price:Number(d.price),beds:Number(d.beds),payments,ownerUid:current.uid,createdAt:serverTimestamp()});f.reset();msg('Propiedad guardada en la nube');await loadData()}catch(e){msg('Error al guardar: '+e.message)}};
 // v1.3: los datos identificables solo se guardan en /prospects; /prospects_public contiene preferencias.

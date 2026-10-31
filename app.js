@@ -42,6 +42,7 @@ async function checkAccess() {
       show('app', true);
       msg('Acceso autorizado · ' + profile.role);
       $('navRequests').hidden = profile.role !== 'admin';
+      $('navBackup').hidden = profile.role !== 'admin';
       $('propertyForm').style.display = profile.role === 'admin' ? '' : 'none';
       await loadData();
       return;
@@ -110,7 +111,7 @@ $('requestAccess').onclick = async () => {
 };
 $('refreshAccess').onclick = checkAccess;
 for(const id of ['signOut','signOutPending'])$(id).onclick=()=>signOut(auth);
-const views=['home','properties','requests','prospects','agenda','dashboard','alerts','opportunities','funnel','facebook'];function navigate(v){for(const x of views)show(x+'View',x===v);show('inventoryAdmin',v==='properties'&&profile?.role==='admin');if(v==='properties')$('propertyForm').style.display=profile?.role==='admin'?'':'none';if(v!=='properties'){show('editPropertyPanel',false);closeGallery()}if(v==='properties')renderAdminProperties()};
+const views=['home','properties','requests','prospects','agenda','dashboard','alerts','opportunities','funnel','facebook','backup'];function navigate(v){for(const x of views)show(x+'View',x===v);show('inventoryAdmin',v==='properties'&&profile?.role==='admin');if(v==='properties')$('propertyForm').style.display=profile?.role==='admin'?'':'none';if(v!=='properties'){show('editPropertyPanel',false);closeGallery()}if(v==='properties')renderAdminProperties()};
 
 // La navegación del embudo se registra en el controlador general de vistas.
 $('navFacebook').onclick=async()=>{
@@ -1855,3 +1856,79 @@ const pagosY = 1140;
   }
 }
 
+
+
+// HABITA NL v2.4.1 - exportacion MANUAL y SOLO LECTURA de Firestore.
+// Nunca escribe, restaura, borra ni cambia reglas o fotografias.
+const backupCollections = [
+  'properties','prospects','prospects_public','activities','opportunities',
+  'groups','facebook_publications','users','requests','invitations','publications'
+];
+function backupSerialize(value) {
+  if (value === null || value === undefined) return value ?? null;
+  if (value && typeof value.toDate === 'function' && typeof value.seconds === 'number') {
+    return {__firestoreType:'timestamp', seconds:value.seconds, nanoseconds:value.nanoseconds};
+  }
+  if (value && typeof value.latitude === 'number' && typeof value.longitude === 'number') {
+    return {__firestoreType:'geopoint', latitude:value.latitude, longitude:value.longitude};
+  }
+  if (value && typeof value.toBase64 === 'function') {
+    return {__firestoreType:'bytes', base64:value.toBase64()};
+  }
+  if (value && value.path && typeof value.path === 'string' && value.constructor?.name === 'DocumentReference') {
+    return {__firestoreType:'reference', path:value.path};
+  }
+  if (Array.isArray(value)) return value.map(backupSerialize);
+  if (typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,backupSerialize(v)]));
+  return value;
+}
+let backupBusy = false;
+$('navBackup').onclick = () => {
+  if (!adminOnly()) return msg('Acceso reservado al administrador.');
+  navigate('backup');
+};
+$('downloadFirestoreBackup').onclick = async () => {
+  if (backupBusy || !adminOnly() || !db || !current) return;
+  if (!$('backupAcknowledgement').checked) {
+    $('backupStatus').textContent='Confirma que guardarás el respaldo en un lugar seguro.';
+    return;
+  }
+  const uid = current.uid;
+  const button = $('downloadFirestoreBackup');
+  backupBusy = true;
+  button.disabled = true;
+  const result = {};
+  const counts = {};
+  try {
+    // Evita generar archivos parciales si alguna coleccion no puede leerse.
+    for (const name of backupCollections) {
+      if (current?.uid !== uid || !adminOnly()) throw Error('La sesión o los permisos cambiaron durante la descarga.');
+      $('backupStatus').textContent='Leyendo '+name+'...';
+      const snapshot = await getDocs(collection(db,name));
+      result[name] = snapshot.docs.map(item=>({id:item.id,data:backupSerialize(item.data())}));
+      counts[name] = snapshot.size;
+    }
+    if (current?.uid !== uid || !adminOnly()) throw Error('La sesión cambió durante el respaldo.');
+    const generatedAt = new Date().toISOString();
+    const payload = {
+      format:'HABITA_NL_FIRESTORE_BACKUP',version:1,
+      generatedAt,projectId:firebaseConfig.projectId,createdByUid:uid,
+      warning:'Datos confidenciales. No incluye binarios de Firebase Storage, reglas, cuentas de Authentication ni colecciones no enumeradas. No es una instantanea transaccional ni una restauracion probada.',
+      collections:result,counts
+    };
+    const blob = new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url;
+    a.download='HABITA_NL_Firestore_'+generatedAt.slice(0,10)+'_'+generatedAt.slice(11,19).replaceAll(':','-')+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    const total = Object.values(counts).reduce((sum,n)=>sum+n,0);
+    $('backupStatus').textContent='Archivo preparado: '+total+' documentos en '+backupCollections.length+' colecciones. Verifica que la descarga se haya completado en tu computadora.';
+  } catch (error) {
+    $('backupStatus').textContent='Respaldo cancelado. No se descargó un archivo parcial. Error: '+error.message;
+    console.error('Error en respaldo manual:',error);
+  } finally {
+    backupBusy=false;button.disabled=false;
+  }
+};

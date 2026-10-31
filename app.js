@@ -650,7 +650,66 @@ $('facebookGroupForm').onsubmit=async e=>{
 
 for(const v of views){const id='nav'+v[0].toUpperCase()+v.slice(1);$(id).onclick=async()=>{navigate(v);if(v==='requests')await loadAdmin();if(v==='prospects')await loadMyProspects();if(v==='agenda')await loadAgenda();if(v==='alerts')await loadAlerts();if(v==='dashboard')await loadDashboard();if(v==='opportunities')await loadOpportunities();if(v==='funnel')await loadFunnel();if(v==='facebook'){$('facebookGroupAdmin').style.display=profile?.role==='admin'?'':'none';await loadFacebookGroups();loadFacebookProperties();await loadFacebookPublications()}}};
 async function loadData(){try{const [p,r]=await Promise.all([getDocs(collection(db,'properties')),getDocs(collection(db,'prospects_public'))]);properties=p.docs.map(x=>({id:x.id,...x.data()}));prospects=r.docs.map(x=>({id:x.id,...x.data()}));$('kAll').textContent=properties.filter(p=>!p.archived).length;$('kAvailable').textContent=properties.filter(x=>!x.archived&&x.status==='Disponible').length;$('kProspects').textContent=prospects.length;$('propertyRows').innerHTML=properties.filter(p=>!p.archived).map(p=>`<tr><td>${escape(p.id.slice(0,8))}</td><td>${escape(p.title)}</td><td>${escape(p.municipality)}</td><td>${Number(p.price).toLocaleString('es-MX',{style:'currency',currency:'MXN'})}</td><td>${escape(p.status)}</td></tr>`).join('');$('prospectRows').innerHTML=prospects.map(p=>{const matches=matchesFor(p).length;return `<tr><td>${escape(p.id.slice(0,8))}</td><td>${escape(p.municipalities.join(', '))}</td><td>${Number(p.maxBudget).toLocaleString('es-MX')}</td><td>${Number(p.minBeds)}</td><td>${escape(p.payment)}</td><td>${matches}</td></tr>`}).join('');renderAdminProperties();renderGallery();renderProspectCRM();loadFacebookProperties();}catch(e){msg('Error al consultar datos: '+e.message)}}
-$('propertyForm').onsubmit=async e=>{e.preventDefault();if(profile?.role!=='admin')return msg('Acceso denegado: solo el administrador puede registrar propiedades.');const f=e.target,d=Object.fromEntries(new FormData(f)),payments=[...f.querySelectorAll('[name=payment]:checked')].map(x=>x.value);if(!payments.length)return msg('Selecciona al menos una forma de pago');const warning=propertyDuplicateText(d);if(warning&&!confirm(warning+'\n\n¿Deseas continuar de todos modos?'))return;try{await addDoc(collection(db,'properties'),{...d,price:Number(d.price),beds:Number(d.beds),payments,ownerUid:current.uid,createdAt:serverTimestamp()});f.reset();msg('Propiedad guardada en la nube');await loadData()}catch(e){msg('Error al guardar: '+e.message)}};
+
+// HABITA NL v2.4.3 - ubicaciones dependientes, catálogo estático opcional SEPOMEX.
+// No hay consultas a Firestore adicionales. Nunca inventar catálogo incompleto.
+const mexicanStates = ['Aguascalientes','Baja California','Baja California Sur','Campeche','Coahuila de Zaragoza','Colima','Chiapas','Chihuahua','Ciudad de México','Durango','Guanajuato','Guerrero','Hidalgo','Jalisco','México','Michoacán de Ocampo','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz de Ignacio de la Llave','Yucatán','Zacatecas'];
+let locationCatalog=null;
+const normalizeLocation=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLocaleLowerCase('es-MX');
+const locationForms=['propertyForm','editPropertyForm'];
+function locationOptions(el,values,placeholder){
+  el.replaceChildren(new Option(placeholder,''));
+  for(const name of values)el.add(new Option(name,name));
+}
+function bindLocationForm(form){
+  const state=form.elements.state, city=form.querySelector('.location-city-select'), colony=form.querySelector('.location-colony-select');
+  const cityValue=form.elements.municipality,colonyValue=form.elements.colony,postal=form.elements.postalCode;
+  locationOptions(state,mexicanStates,'Selecciona estado');
+  const stateData=()=>locationCatalog?.[state.value]||{};
+  function cityChoices(){
+    const cities=Object.keys(stateData()).sort((a,b)=>a.localeCompare(b,'es-MX'));
+    locationOptions(city,cities,'Selecciona municipio');
+    city.disabled=!cities.length;
+  }
+  function colonyChoices(){
+    const match=Object.keys(stateData()).find(v=>normalizeLocation(v)===normalizeLocation(cityValue.value));
+    const colonies=match?Object.keys(stateData()[match]).sort((a,b)=>a.localeCompare(b,'es-MX')):[];
+    locationOptions(colony,colonies,'Selecciona colonia');
+    colony.disabled=!colonies.length;
+  }
+  function selectedPostal(){
+    const chosen=Object.keys(stateData()).find(v=>normalizeLocation(v)===normalizeLocation(cityValue.value));
+    const colonyKey=chosen&&Object.keys(stateData()[chosen]).find(v=>normalizeLocation(v)===normalizeLocation(colonyValue.value));
+    const codes=colonyKey?stateData()[chosen][colonyKey]:[];
+    postal.value=Array.isArray(codes)&&codes.length===1?String(codes[0]).padStart(5,'0'):'';
+    postal.placeholder=Array.isArray(codes)&&codes.length>1?`CP posibles: ${codes.join(', ')}`:'00000';
+  }
+  state.addEventListener('change',()=>{cityValue.value='';colonyValue.value='';postal.value='';cityChoices();colonyChoices();});
+  city.addEventListener('change',()=>{cityValue.value=city.value;colonyValue.value='';postal.value='';colonyChoices();});
+  cityValue.addEventListener('input',()=>{city.value=[...city.options].some(o=>o.value===cityValue.value)?cityValue.value:'';colonyValue.value='';postal.value='';colonyChoices();});
+  colony.addEventListener('change',()=>{colonyValue.value=colony.value;selectedPostal();});
+  colonyValue.addEventListener('input',()=>{colony.value=[...colony.options].some(o=>o.value===colonyValue.value)?colonyValue.value:'';selectedPostal();});
+  form._locationRefresh=()=>{cityChoices();city.value=[...city.options].some(o=>o.value===cityValue.value)?cityValue.value:'';colonyChoices();colony.value=[...colony.options].some(o=>o.value===colonyValue.value)?colonyValue.value:'';};
+  form._locationRefresh();
+}
+function populateLocationEdit(form,p){
+  if(p.state && mexicanStates.includes(p.state))form.elements.state.value=p.state;
+  form._locationRefresh?.();
+  // Los registros previos no tenían estado: preservamos municipio y colonia tal cual.
+}
+function validPropertyLocation(form){
+  const state=form.elements.state.value, city=form.elements.municipality.value.trim(),colony=form.elements.colony.value.trim(),code=form.elements.postalCode.value.trim();
+  if((state&&!mexicanStates.includes(state))||(!state&&form.id==='propertyForm')||!city||!colony){msg('Selecciona estado y captura municipio y colonia.');return false;}
+  if(code&&!/^\d{5}$/.test(code)){msg('El código postal debe contener exactamente cinco dígitos.');return false;}
+  return true;
+}
+for(const id of locationForms)bindLocationForm($(id));
+fetch('./ubicaciones-sepomex.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(c=>{
+  if(c&&typeof c==='object'&&!Array.isArray(c))locationCatalog=c;
+  for(const id of locationForms)$(id)._locationRefresh?.();
+}).catch(()=>{ /* El formulario mantiene captura manual si falta el archivo opcional */ });
+
+$('propertyForm').onsubmit=async e=>{e.preventDefault();if(profile?.role!=='admin')return msg('Acceso denegado: solo el administrador puede registrar propiedades.');const f=e.target,d=Object.fromEntries(new FormData(f)),payments=[...f.querySelectorAll('[name=payment]:checked')].map(x=>x.value);if(!payments.length)return msg('Selecciona al menos una forma de pago');if(!validPropertyLocation(f))return;const warning=propertyDuplicateText(d);if(warning&&!confirm(warning+'\n\n¿Deseas continuar de todos modos?'))return;try{await addDoc(collection(db,'properties'),{...d,price:Number(d.price),beds:Number(d.beds),payments,ownerUid:current.uid,createdAt:serverTimestamp()});f.reset();msg('Propiedad guardada en la nube');await loadData()}catch(e){msg('Error al guardar: '+e.message)}};
 // v1.3: los datos identificables solo se guardan en /prospects; /prospects_public contiene preferencias.
 const splitList=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
 const norm=v=>String(v||'').trim().toLocaleLowerCase('es-MX');
@@ -721,12 +780,12 @@ function exportInventoryXlsx(available) {
     const text = String(value ?? '');
     return /^[\s]*[=+@\-]/.test(text) ? "'" + text : text;
   };
-  const headers = ['ID Firebase', 'Referencia HNL', 'Titulo', 'Municipio', 'Colonia',
+  const headers = ['ID Firebase', 'Referencia HNL', 'Titulo', 'Estado', 'Municipio', 'Colonia', 'Codigo postal',
     'Precio MXN', 'Habitaciones', 'Banos', 'Tipo de propiedad', 'Formas de pago',
     'Reembolso %', 'Estatus'];
   const values = rows.map(p => [
     safeText(p.id), 'HNL-' + String(p.id || '').slice(0, 8).toUpperCase(),
-    safeText(p.title), safeText(p.municipality), safeText(p.colony),
+    safeText(p.title), safeText(p.state), safeText(p.municipality), safeText(p.colony), safeText(p.postalCode),
     Number.isFinite(Number(p.price)) ? Number(p.price) : 0,
     Number.isFinite(Number(p.beds)) ? Number(p.beds) : 0,
     p.baths === null || p.baths === undefined || p.baths === '' ? '' : Number(p.baths),
@@ -735,15 +794,15 @@ function exportInventoryXlsx(available) {
   ]);
   try {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...values]);
-    ws['!cols'] = [20, 19, 42, 23, 32, 18, 16, 12, 32, 30, 16, 22].map(wch => ({ wch }));
+    ws['!cols'] = [20, 19, 42, 23, 23, 32, 18, 18, 16, 12, 32, 30, 16, 22].map(wch => ({ wch }));
     ws['!autofilter'] = { ref: ws['!ref'] };
     for (let r = 2; r <= values.length + 1; r++) {
-      const cell = ws['F' + r];
+      const cell = ws['H' + r];
       if (cell && cell.t === 'n') cell.z = '\"$\"#,##0.00';
     }
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, ws, 'Inventario');
-    XLSX.writeFile(workbook, `HABITA_NL_${available ? 'Disponibles' : 'Todas'}_v2.3.1.xlsx`);
+    XLSX.writeFile(workbook, `HABITA_NL_${available ? 'Disponibles' : 'Todas'}_v2.4.3.xlsx`);
     msg(`${rows.length} propiedad(es) exportada(s) correctamente a Excel.`);
   } catch (error) {
     msg('No se pudo exportar el inventario: ' + error.message);
@@ -886,11 +945,11 @@ function startEdit(id){
  if(!adminOnly())return;
  const p=properties.find(x=>x.id===id&&!x.archived);if(!p)return;
  editingId=id;const f=$('editPropertyForm');f.reset();
- for(const key of ['title','municipality','colony','price','beds','baths','status','propertyType','agency','appraisal','earlyDelivery','reimbursement','reimbursementPercent','address']){
+ for(const key of ['title','state','municipality','colony','postalCode','price','beds','baths','status','propertyType','agency','appraisal','earlyDelivery','reimbursement','reimbursementPercent','address']){
    if(f.elements[key])f.elements[key].value=p[key]??'';
  }
  for(const checkbox of f.querySelectorAll('[name="editPayment"]')) checkbox.checked=(p.payments||[]).some(v=>norm(v)===norm(checkbox.value));
- show('editPropertyPanel',true);refreshDuplicateWarnings();$('editPropertyPanel').scrollIntoView({block:'start'});
+ populateLocationEdit(f,p);show('editPropertyPanel',true);refreshDuplicateWarnings();$('editPropertyPanel').scrollIntoView({block:'start'});
 }
 $('cancelEdit').onclick=()=>{editingId=null;show('editPropertyPanel',false)};
 $('editPropertyForm').onsubmit=async e=>{
@@ -900,7 +959,7 @@ $('editPropertyForm').onsubmit=async e=>{
  if(!payments.length)return msg('Selecciona al menos una forma de pago.');
  const price=Number(d.price),beds=Number(d.beds),baths=d.baths===''?null:Number(d.baths);
  if(!Number.isFinite(price)||price<=0||!Number.isInteger(beds)||beds<0||baths!==null&&(!Number.isInteger(baths)||baths<0))return msg('Revisa el precio, habitaciones y baños.');
- const update={title:d.title.trim(),municipality:d.municipality.trim(),colony:(d.colony||'').trim(),price,beds,baths,status:d.status,payments,
+ if(!validPropertyLocation(f))return;const update={state:d.state||'',postalCode:d.postalCode||'',title:d.title.trim(),municipality:d.municipality.trim(),colony:(d.colony||'').trim(),price,beds,baths,status:d.status,payments,
  propertyType:d.propertyType||'',agency:(d.agency||'').trim(),appraisal:d.appraisal===''?'':Number(d.appraisal),
  earlyDelivery:d.earlyDelivery||'',reimbursement:d.reimbursement||'',reimbursementPercent:d.reimbursementPercent||'',address:(d.address||'').trim(),
  updatedBy:current.uid,updatedAt:serverTimestamp()};

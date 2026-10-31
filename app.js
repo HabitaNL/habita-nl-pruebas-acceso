@@ -704,8 +704,52 @@ $('editProspectForm').onsubmit=async e=>{
  try{const batch=writeBatch(db);batch.update(doc(db,'prospects',id),{...preferences,name:d.name.trim(),phone:d.phone.trim(),email:d.email.trim(),stage:d.stage,updatedAt:serverTimestamp()});batch.update(doc(db,'prospects_public',id),preferences);await batch.commit();editingProspectId=null;show('editProspectPanel',false);msg('Ficha y preferencias compartidas actualizadas.');await loadData();await loadMyProspects();}
  catch(err){msg('No se pudo editar el prospecto: '+err.message)}
 };
-function csv(available){const rows=properties.filter(p=>!p.archived&&(!available||p.status==='Disponible'));const headers=['ID','Título','Municipio','Colonia','Precio MXN','Habitaciones','Baños','Tipo','Formas de pago','Reembolso %','Estatus'];const data=[headers,...rows.map(p=>[p.id,p.title,p.municipality,p.colony,p.price,p.beds,p.baths,p.propertyType,(p.payments||[]).join(' / '),p.reimbursementPercent||'N/A',p.status])];const val=x=>'"'+String(x??'').replace(/^[=+@\-\t\r]/,'\'$&').replace(/"/g,'""')+'"';const content='\ufeff'+data.map(row=>row.map(val).join(';')).join('\r\n');const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='HABITA_NL_'+(available?'Disponibles':'Todas')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-$('exportAvailable').onclick=()=>csv(true);$('exportAll').onclick=()=>csv(false);
+// HABITA NL v2.3.1: exportacion XLSX nativa con columnas y filtro en Excel.
+function exportInventoryXlsx(available) {
+  if (typeof XLSX === 'undefined') {
+    msg('No se pudo cargar la biblioteca de Excel. Verifica la conexion y vuelve a intentarlo.');
+    return;
+  }
+  const rows = properties.filter(p => !p.archived && (!available || p.status === 'Disponible'));
+  if (!rows.length) {
+    msg('No hay propiedades para exportar.');
+    return;
+  }
+  // Neutraliza formulas en textos que se abran en aplicaciones de hojas de calculo.
+  const safeText = value => {
+    const text = String(value ?? '');
+    return /^[\s]*[=+@\-]/.test(text) ? "'" + text : text;
+  };
+  const headers = ['ID Firebase', 'Referencia HNL', 'Titulo', 'Municipio', 'Colonia',
+    'Precio MXN', 'Habitaciones', 'Banos', 'Tipo de propiedad', 'Formas de pago',
+    'Reembolso %', 'Estatus'];
+  const values = rows.map(p => [
+    safeText(p.id), 'HNL-' + String(p.id || '').slice(0, 8).toUpperCase(),
+    safeText(p.title), safeText(p.municipality), safeText(p.colony),
+    Number.isFinite(Number(p.price)) ? Number(p.price) : 0,
+    Number.isFinite(Number(p.beds)) ? Number(p.beds) : 0,
+    p.baths === null || p.baths === undefined || p.baths === '' ? '' : Number(p.baths),
+    safeText(p.propertyType), safeText((p.payments || []).join(' / ')),
+    safeText(p.reimbursementPercent || 'N/A'), safeText(p.status)
+  ]);
+  try {
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...values]);
+    ws['!cols'] = [20, 19, 42, 23, 32, 18, 16, 12, 32, 30, 16, 22].map(wch => ({ wch }));
+    ws['!autofilter'] = { ref: ws['!ref'] };
+    for (let r = 2; r <= values.length + 1; r++) {
+      const cell = ws['F' + r];
+      if (cell && cell.t === 'n') cell.z = '\"$\"#,##0.00';
+    }
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, ws, 'Inventario');
+    XLSX.writeFile(workbook, `HABITA_NL_${available ? 'Disponibles' : 'Todas'}_v2.3.1.xlsx`);
+    msg(`${rows.length} propiedad(es) exportada(s) correctamente a Excel.`);
+  } catch (error) {
+    msg('No se pudo exportar el inventario: ' + error.message);
+  }
+}
+$('exportAvailable').onclick = () => exportInventoryXlsx(true);
+$('exportAll').onclick = () => exportInventoryXlsx(false);
 
 async function loadAdmin() {
   if (profile?.role !== 'admin') return;

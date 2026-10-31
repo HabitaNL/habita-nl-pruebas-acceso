@@ -903,6 +903,56 @@ loadData=async function(){await originalLoadData();const rows=$('propertyRows').
  rows.forEach(row=>{const id=properties.filter(p=>!p.archived)[[...rows].indexOf(row)]?.id;if(!id)return;
  const cell=document.createElement('td');const b=document.createElement('button');b.className='secondary';b.textContent='Fotos';b.onclick=()=>openGallery(id);cell.appendChild(b);row.appendChild(cell);});};
 
+// HABITA NL v2.3: filtros y tarjetas en memoria. No añade documentos ni campos a Firestore.
+const invFilterIds=['invSearch','invMunicipality','invStatus','invType','invMinPrice','invMaxPrice','invBeds','invBaths','invPayment'];
+let inventoryDisplayMode='cards';
+const inventoryCode=p=>'HNL-'+String(p.id||'').slice(0,8).toUpperCase(); // referencia corta, no folio consecutivo
+function refreshInventoryOptions(){
+  for(const [id,key] of [['invMunicipality','municipality'],['invType','propertyType']]){
+    const el=$(id),old=el.value,values=[...new Set(properties.filter(p=>!p.archived).map(p=>String(p[key]||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es-MX'));
+    el.replaceChildren(new Option('Todos',''));
+    values.forEach(value=>el.add(new Option(value,value)));
+    el.value=values.includes(old)?old:'';
+  }
+}
+function inventoryMatches(p){
+  if(p.archived)return false;
+  const text=norm($('invSearch').value),search=[p.title,p.municipality,p.colony,p.id,inventoryCode(p)].some(v=>norm(v).includes(text));
+  const min=$('invMinPrice').value,max=$('invMaxPrice').value;
+  const pay=$('invPayment').value;
+  return search&&(!$('invMunicipality').value||norm(p.municipality)===norm($('invMunicipality').value))
+   &&(!$('invStatus').value||p.status===$('invStatus').value)
+   &&(!$('invType').value||p.propertyType===$('invType').value)
+   &&(min===''||Number(p.price)>=Number(min))&&(max===''||Number(p.price)<=Number(max))
+   &&(!$('invBeds').value||Number(p.beds)>=Number($('invBeds').value))
+   &&(!$('invBaths').value||Number(p.baths)>=Number($('invBaths').value))
+   &&(!pay||(p.payments||[]).some(value=>norm(value)===norm(pay)));
+}
+function renderInventory(){
+  const list=properties.filter(inventoryMatches);
+  $('invCount').textContent=`${list.length} de ${properties.filter(p=>!p.archived).length} propiedades`;
+  const cards=$('inventoryCards'),table=$('inventoryTable');
+  cards.hidden=inventoryDisplayMode!=='cards';table.hidden=inventoryDisplayMode!=='table';
+  $('invCardsBtn').className=inventoryDisplayMode==='cards'?'':'secondary';
+  $('invTableBtn').className=inventoryDisplayMode==='table'?'':'secondary';
+  // Conserva la tabla v2.2 con sus botones y solo oculta filas filtradas.
+  const indexed=properties.filter(p=>!p.archived);
+  [...$('propertyRows').querySelectorAll('tr')].forEach((tr,i)=>{tr.hidden=!indexed[i]||!inventoryMatches(indexed[i]);});
+  cards.innerHTML=list.map(p=>{
+    const first=(Array.isArray(p.photos)?p.photos:[]).find(ph=>{try{const u=new URL(ph?.url);return u.protocol==='https:'}catch{return false}});
+    const photo=first?`<img src="${escape(first.url)}" alt="Fotografía de ${escape(p.title||'propiedad')}" loading="lazy">`:'Sin fotografía';
+    const money=Number(p.price||0).toLocaleString('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:0});
+    return `<article class="inventory-card"><div class="inventory-photo">${photo}</div><div class="inventory-card-body"><span class="inventory-code">${escape(inventoryCode(p))}</span><h3>${escape(p.title||'Propiedad')}</h3><p class="inventory-price">${escape(money)}</p><div class="inventory-meta">${escape([p.colony,p.municipality].filter(Boolean).join(', '))}<br>${escape(p.beds??'N/D')} habitaciones · ${escape(p.baths??'N/D')} baños<br>Estado: ${escape(p.status||'Sin especificar')}<br>${escape(p.propertyType||'')}</div><button class="secondary" type="button" data-inv-gallery="${escape(p.id)}">Ver fotografías</button></div></article>`;
+  }).join('')||'<p class="muted">No hay propiedades que coincidan con los filtros.</p>';
+  cards.querySelectorAll('[data-inv-gallery]').forEach(b=>b.onclick=()=>openGallery(b.dataset.invGallery));
+}
+for(const id of invFilterIds)$(id).addEventListener('input',renderInventory);
+$('invClear').onclick=()=>{for(const id of invFilterIds)$(id).value='';renderInventory();};
+$('invCardsBtn').onclick=()=>{inventoryDisplayMode='cards';renderInventory();};
+$('invTableBtn').onclick=()=>{inventoryDisplayMode='table';renderInventory();};
+const inventoryLoadData=loadData;
+loadData=async function(){await inventoryLoadData();refreshInventoryOptions();renderInventory();};
+
 // v1.4: Seguimiento privado por prospecto, actividades y visitas.
 function localNow(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
 async function openFollowup(id){

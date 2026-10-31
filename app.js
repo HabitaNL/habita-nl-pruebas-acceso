@@ -1932,3 +1932,78 @@ $('downloadFirestoreBackup').onclick = async () => {
     backupBusy=false;button.disabled=false;
   }
 };
+
+
+// HABITA NL v2.4.2: Respaldo MANUAL de fotografias referenciadas, solo lectura.
+let photoBackupBusy = false;
+$('downloadPhotosBackup').onclick = async () => {
+  const status = $('photosBackupStatus');
+  if (photoBackupBusy || !adminOnly() || !current) return;
+  if (!$('backupAcknowledgement').checked) {
+    status.textContent = 'Primero confirma que guardarás el respaldo en una ubicación segura.';
+    return;
+  }
+  if (typeof JSZip === 'undefined') {
+    status.textContent = 'No se pudo cargar la biblioteca ZIP. Revisa tu conexión o el bloqueo de scripts.';
+    return;
+  }
+  const uid = current.uid;
+  const button = $('downloadPhotosBackup');
+  photoBackupBusy = true;
+  button.disabled = true;
+  try {
+    const snap = await getDocs(collection(db, 'properties'));
+    if (current?.uid !== uid || !adminOnly()) throw Error('La sesión cambió durante el respaldo.');
+    const entries = [];
+    for (const property of snap.docs) {
+      const photos = property.data().photos;
+      if (!Array.isArray(photos)) continue;
+      photos.forEach((photo, i) => {
+        if (photo && (photo.path || photo.url)) entries.push({propertyId:property.id, index:i, path:photo.path || '', url:photo.url || ''});
+      });
+    }
+    if (!entries.length) { status.textContent = 'No hay fotografías referenciadas en las propiedades.'; return; }
+    // Evita agotar la memoria en navegadores al crecer el inventario.
+    if (entries.length > 250) throw Error('Hay más de 250 fotografías. Es necesario dividir el respaldo en lotes.');
+    const zip = new JSZip();
+    const manifest = {format:'HABITA_NL_STORAGE_PHOTOS',version:1,generatedAt:new Date().toISOString(),projectId:firebaseConfig.projectId,files:[]};
+    let totalBytes = 0;
+    for (let i=0;i<entries.length;i++) {
+      if (current?.uid !== uid || !adminOnly()) throw Error('La sesión cambió durante el respaldo.');
+      const photo = entries[i];
+      status.textContent = `Descargando fotografía ${i+1} de ${entries.length}...`;
+      // Solo se aceptan rutas bajo la carpeta propia del inmueble.
+      const prefix = `properties/${photo.propertyId}/`;
+      if (!photo.path || !photo.path.startsWith(prefix) || photo.path.includes('..')) {
+        throw Error(`La fotografía ${i+1} de ${photo.propertyId} no tiene una ruta Storage válida.`);
+      }
+      const downloadUrl = await getDownloadURL(storageRef(storage, photo.path));
+      const response = await fetch(downloadUrl, {cache:'no-store'});
+      if (!response.ok) throw Error(`No se pudo descargar ${photo.path} (HTTP ${response.status}).`);
+      const blob = await response.blob();
+      if (!blob.size) throw Error(`Fotografía vacía: ${photo.path}`);
+      totalBytes += blob.size;
+      if (totalBytes > 150 * 1024 * 1024) throw Error('El respaldo supera 150 MB. Es necesario dividirlo en lotes.');
+      const ext = /\.(jpe?g|png|webp)$/i.exec(photo.path)?.[1]?.toLowerCase() || 'jpg';
+      const filename = `properties/${photo.propertyId}/foto_${String(photo.index+1).padStart(2,'0')}.${ext}`;
+      zip.file(filename, blob);
+      manifest.files.push({propertyId:photo.propertyId,index:photo.index,path:photo.path,zipFile:filename,bytes:blob.size});
+    }
+    zip.file('manifest.json', JSON.stringify(manifest,null,2));
+    status.textContent = 'Comprimiendo fotografías...';
+    const zipBlob = await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:3}});
+    const url = URL.createObjectURL(zipBlob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='HABITA_NL_Fotos_'+new Date().toISOString().slice(0,10)+'.zip';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    status.textContent = `ZIP preparado: ${entries.length} fotos de ${new Set(entries.map(e=>e.propertyId)).size} propiedades. Comprueba el archivo descargado y su manifest.json.`;
+  } catch (e) {
+    status.textContent = 'No se generó un ZIP completo: '+e.message;
+    console.error('Error respaldando fotografías:',e);
+  } finally {
+    photoBackupBusy=false;
+    button.disabled=false;
+  }
+};

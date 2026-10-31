@@ -704,6 +704,28 @@ function validPropertyLocation(form){
   return true;
 }
 for(const id of locationForms)bindLocationForm($(id));
+// Limpiar exclusivamente el formulario de alta. No escribe en Firebase ni elimina el catálogo local.
+$('clearPropertyForm').addEventListener('click',()=>{
+  const form=$('propertyForm');
+  const hasData=[...form.querySelectorAll('input, select, textarea')].some(el=>{
+    if(el.type==='checkbox'||el.type==='radio')return el.checked;
+    if(el.name==='status')return el.value!=='Disponible';
+    return el.value!=='';
+  });
+  if(hasData && !confirm('¿Deseas limpiar los datos capturados? Esta acción no se puede deshacer.'))return;
+  form.reset();
+  // Restaurar opciones de listas en cascada; reset() por sí solo no reconstruye sus opciones.
+  form._locationRefresh?.();
+  const city=form.querySelector('.location-city-select');
+  const colony=form.querySelector('.location-colony-select');
+  city.value='';colony.value='';
+  form.elements.municipality.value='';form.elements.colony.value='';
+  form.elements.postalCode.value='';form.elements.postalCode.placeholder='00000';
+  const duplicate=$('propertyDuplicateWarning');if(duplicate)duplicate.textContent='';
+  // Notificar cualquier lógica de validación asociada a campos modificados.
+  form.dispatchEvent(new Event('input',{bubbles:true}));
+  msg('Formulario de alta limpio. El catálogo SEPOMEX permanece disponible.');
+});
 // Catálogo personal SEPOMEX: importación local, sin publicar ni enviar el dataset.
 const sepomexInput=document.getElementById('sepomexLocalFile');
 const sepomexStatus=document.getElementById('sepomexLocalStatus');

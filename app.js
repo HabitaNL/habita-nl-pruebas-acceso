@@ -1982,7 +1982,7 @@ async function deleteSingleCommercial(name,id,reload){
  if(!['opportunities','activities'].includes(name)||!current||profile?.status!=='active')return;
  const ref=doc(db,name,id),snapshot=await getDoc(ref);
  if(!snapshot.exists())return msg('El registro ya no existe.');
- if(snapshot.data().ownerUid!==current.uid)return msg('Solo puedes eliminar registros propios.');
+ if(snapshot.data().ownerUid!==current.uid && !adminOnly())return msg('Solo puedes eliminar registros propios.');
  if(!confirm('¿Eliminar definitivamente este registro? Esta acción no se puede deshacer.'))return;
  try{await deleteDoc(ref);msg('Registro eliminado.');await reload()}catch(e){msg('No se pudo eliminar. Verifica permisos de Firestore: '+e.message)}
 }
@@ -1991,10 +1991,10 @@ async function deleteSingleProspect(id){
  try{
   const [p,acts,opps]=await Promise.all([
    getDoc(doc(db,'prospects',id)),
-   getDocs(query(collection(db,'activities'),where('ownerUid','==',current.uid))),
-   getDocs(query(collection(db,'opportunities'),where('ownerUid','==',current.uid)))
+   getDocs(adminOnly()?collection(db,'activities'):query(collection(db,'activities'),where('ownerUid','==',current.uid))),
+   getDocs(adminOnly()?collection(db,'opportunities'):query(collection(db,'opportunities'),where('ownerUid','==',current.uid)))
   ]);
-  if(!p.exists()||p.data().ownerUid!==current.uid)return msg('Solo puedes eliminar prospectos propios.');
+  if(!p.exists()||(p.data().ownerUid!==current.uid && !adminOnly()))return msg('No tienes autorización para eliminar este prospecto.');
   if(acts.docs.some(x=>x.data().prospectId===id)||opps.docs.some(x=>x.data().prospectId===id))return msg('Antes elimina las actividades y oportunidades vinculadas al prospecto.');
   if(!confirm('¿Eliminar la ficha PRIVADA y la demanda COMPARTIDA de este prospecto? Acción irreversible.'))return;
   const batch=writeBatch(db);batch.delete(doc(db,'prospects',id));batch.delete(doc(db,'prospects_public',id));await batch.commit();
@@ -2023,6 +2023,7 @@ $('cleanupPreview').onclick=async()=>{
    const a=new Set(entries.find(e=>e.name==='prospects').ids),b=new Set(entries.find(e=>e.name==='prospects_public').ids);
    if(a.size!==b.size||[...a].some(x=>!b.has(x)))return $('cleanupSummary').textContent='Las fichas privadas y compartidas no coinciden exactamente. Depuración bloqueada; revisa los registros.';
   }
+  if(entries.reduce((n,e)=>n+e.ids.length,0)>450)return $('cleanupSummary').textContent='Hay más de 450 documentos. La depuración está bloqueada para evitar borrados parciales; requiere planificación separada.';
   cleanPreview={entries,uid:current.uid,selected:selected.join('|')};
   $('cleanupSummary').textContent=entries.map(e=>`${e.name}: ${e.ids.length}`).join(' · ')+'. Total: '+entries.reduce((n,e)=>n+e.ids.length,0)+' documentos. Confirma respaldo y escribe ELIMINAR.';
   $('cleanupExecute').disabled=!(cleanPreview&&$('cleanupBackupDone').checked&&$('cleanupPhrase').value==='ELIMINAR');
@@ -2038,9 +2039,13 @@ $('cleanupExecute').onclick=async()=>{
  $('cleanupExecute').disabled=true;$('cleanupPreview').disabled=true;
  try{
   for(const e of items){const snap=await getDocs(collection(db,e.name));if(snap.size!==e.ids.length||snap.docs.some(d=>!e.ids.includes(d.id)))throw Error('Los registros cambiaron desde la consulta. Actualiza la vista previa.');}
-  // Firestore puede rechazar deletes por reglas: un error se informa, sin afirmar éxito total.
-  let deleted=0;
-  for(const e of items){for(let i=0;i<e.ids.length;i+=400){const batch=writeBatch(db);for(const id of e.ids.slice(i,i+400))batch.delete(doc(db,e.name,id));await batch.commit();deleted+=Math.min(400,e.ids.length-i);}}
+  // Una sola escritura atómica hasta 450 documentos (margen sobre límite Firestore de 500).
+  // Para conjuntos mayores se requiere solución administrativa por lotes con plan de recuperación.
+  if(count>450)throw Error('Hay más de 450 documentos. Esta versión bloquea la operación para evitar eliminaciones parciales entre lotes.');
+  const batch=writeBatch(db);
+  for(const e of items){for(const id of e.ids)batch.delete(doc(db,e.name,id));}
+  await batch.commit();
+  const deleted=count;
   $('cleanupSummary').textContent=`Depuración completada: ${deleted} documentos eliminados.`;
   msg('Depuración completada.');await loadData();
  }catch(e){$('cleanupSummary').textContent='Depuración no completada (puede haber eliminación parcial): '+e.message+'. Verifica Firestore y genera una nueva vista previa.';msg('Error al depurar: '+e.message)}

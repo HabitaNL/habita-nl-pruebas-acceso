@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HABITA NL · v2.6.2 (Pruebas)</title><style>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HABITA NL · v2.6.3 (Pruebas)</title><style>
 :root{font-family:Arial,sans-serif;background:#f3f6fa;color:#142b44}*{box-sizing:border-box}body{margin:0}header{background:#102e52;color:#fff;padding:20px 5%;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}main{max-width:1100px;margin:25px auto;padding:0 18px}.card{background:white;border:1px solid #d9e2eb;border-radius:12px;padding:22px;margin:15px 0}h1{font-size:22px;margin:0}h2{margin-top:0}p{line-height:1.5}.muted{color:#5e6c7c;font-size:14px}button{border:0;border-radius:7px;background:#145c9c;color:white;padding:11px 14px;cursor:pointer;margin:4px 4px 4px 0}button.secondary{background:#e8eff7;color:#123957}button:disabled{opacity:.45;cursor:not-allowed}input,select,textarea{padding:10px;border:1px solid #bfcdd9;border-radius:7px;width:100%;margin:5px 0 12px;font:inherit}label{font-size:13px;font-weight:bold}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e4eaf0;padding:10px;text-align:left;font-size:14px}section[hidden]{display:none}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.stat{background:#f2f6fb;padding:16px;border-radius:8px}.stat strong{display:block;font-size:27px;margin-top:8px}#message{padding:12px;background:#eaf2ff;border-radius:8px;margin:15px 0;white-space:pre-wrap}.danger{color:#ad3333}.flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.scroll{overflow:auto}a{color:#145c9c}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 
 /* HABITA NL v1.0 - diseño adaptable, sin cambios en Firebase */
@@ -185,6 +185,44 @@ body:has(#homeView:not([hidden])) #navHome,body:has(#propertiesView:not([hidden]
 @media(max-width:760px){#propertiesView{padding:18px 14px}#propertiesView .inventory-tools{padding:16px}#propertiesView .inventory-tools>.grid{grid-template-columns:repeat(2,minmax(0,1fr))}#propertiesView>form#propertyForm{padding:14px}#propertiesView>.flex:has(#exportAvailable){justify-content:stretch}#propertiesView>.flex:has(#exportAvailable) button{flex:1}#inventoryCards{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:13px}}
 @media(max-width:480px){#propertiesView .inventory-tools>.grid{grid-template-columns:1fr}#propertiesView>.flex:has(#exportAvailable){flex-direction:column}#propertiesView>.flex:has(#exportAvailable) button{width:100%}#inventoryCards{grid-template-columns:1fr}#propertiesView .inventory-tools>.flex{gap:6px}#propertiesView #invClear{width:100%;margin-right:0}#propertiesView #invCardsBtn,#propertiesView #invTableBtn{flex:1}#propertyForm:not([style*="display: none"]):not([style*="display:none"]){padding-top:52px!important}}
 @media(prefers-reduced-motion:reduce){#inventoryCards .inventory-card{transition:none}#inventoryCards .inventory-card:hover{transform:none}}
+
+/* HABITA NL v2.6.3 — pulido visual de módulos comerciales (sin cambios en eventos o datos) */
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView){--hn-accent:#1763a0;--hn-soft:#f4f8fc;--hn-border:#dce7f1;padding:28px!important}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView)>h2{font-size:clamp(22px,2.4vw,29px);letter-spacing:-.035em;color:#163a59;display:flex;align-items:center;gap:12px;margin:0 0 10px}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView)>h2:before{display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:12px;background:#e9f2fb;color:#1763a0;font-size:22px;font-weight:500}
+#prospectsView>h2:before{content:"♙"}
+#agendaView>h2:before{content:"▦"}
+#opportunitiesView>h2:before{content:"◇"}
+#funnelView>h2:before{content:"▥"}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView)>p.muted:first-of-type{border-left:3px solid #f28c28;padding:8px 13px;background:#fffaf5;border-radius:0 8px 8px 0;line-height:1.6;margin:0 0 24px;color:#5c7084}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView)>h3{color:#214867;font-size:17px;letter-spacing:-.015em;margin:27px 0 15px;padding-bottom:11px;border-bottom:1px solid #e2ebf3}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) .stat{border:1px solid #dfebf4;border-top:3px solid #1763a0;background:linear-gradient(145deg,#fff,#f7fafd);box-shadow:0 5px 16px #12375708;border-radius:13px;padding:18px;font-size:12px;color:#57718a;font-weight:700;letter-spacing:.015em}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) .stat strong{font-size:clamp(23px,2.2vw,29px);line-height:1.4;color:#153c60;letter-spacing:-.025em;margin-top:6px}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) form{background:#fafcff;border:1px solid #dfeaf4;border-radius:15px;padding:22px;gap:15px}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) form label{font-size:12px;color:#365975;font-weight:700}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) input:not([type=checkbox]),:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) select,:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) textarea{border-radius:9px;border:1px solid #d5e2ed;background:#fff}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) input:focus,:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) select:focus,:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) textarea:focus{outline:2px solid #1763a043;outline-offset:1px}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) button{border-radius:9px}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) form button[type=submit]{background:#ed8625;border-color:#ed8625;font-weight:700}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) form button[type=submit]:hover{background:#d67218}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) .scroll{border:1px solid #dce7f1;border-radius:12px;overflow-x:auto;box-shadow:0 4px 14px #12375708}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) table{min-width:660px}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) th{background:#eaf2f9;color:#294e6d;text-transform:uppercase;letter-spacing:.04em;font-size:11px;padding:14px 12px}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) td{padding:13px 12px;vertical-align:middle}
+:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) tbody tr:nth-child(even){background:#fbfdff}
+#prospectsView #editProspectPanel{margin:23px 0;border-top:3px solid #1763a0;background:#fff}
+#prospectsView #editProspectPanel h3{color:#214867}
+#prospectsView #prospectForm>div:has(button[type=submit]),#opportunitiesView #oppForm>div:has(button[type=submit]){grid-column:1/-1;border-top:1px solid #e0eaf3;padding-top:14px}
+#prospectsView :is(#followupRows,#matchingRows,#prospectRows),#opportunitiesView #oppRows,#agendaView #agendaRows{min-width:0}
+#agendaView>.grid:has(#agendaFilter){padding:18px;background:#f5f9fd;border:1px solid #dde8f3;border-radius:14px;margin:21px 0 13px;gap:12px}
+#agendaView #agendaHelp{padding:12px 14px;background:#eef5fb;border-radius:10px;border-left:3px solid #1763a0}
+#agendaView #agendaRows>*,#opportunitiesView #oppRows>*{max-width:100%}
+#opportunitiesView>label:has(#oppFilter){display:block;max-width:400px;margin:10px 0 14px;font-weight:700;color:#365975}
+#opportunitiesView #oppStatus,#funnelView #funnelStatus{background:#f4f8fc;border:1px solid #dfeaf4;padding:11px 14px;border-radius:9px;line-height:1.5}
+#funnelView>.grid:has(#funnelAdvisor){background:#f6f9fd;border:1px solid #dfe9f4;border-radius:12px;padding:16px;margin:20px 0}
+#funnelView #funnelStages{padding:17px;border:1px solid #e1eaf3;border-radius:13px;background:#fcfdff}
+@media(max-width:760px){:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView){padding:17px 14px!important}:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) form{padding:15px}:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView)>h2:before{width:36px;height:36px;font-size:18px}}
+@media(max-width:480px){#agendaView>.grid:has(#agendaFilter){grid-template-columns:1fr}:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) .stat{padding:13px}}
 </style></head>
 <body>
 <header>
@@ -196,7 +234,7 @@ body:has(#homeView:not([hidden])) #navHome,body:has(#propertiesView:not([hidden]
     >
     <div>
       <h1>HABITA NL</h1>
-      <small>v2.6.2 (Pruebas)</small>
+      <small>v2.6.3 (Pruebas)</small>
     </div>
   </div>
   <div id="who">Sin iniciar sesión</div>
@@ -571,5 +609,5 @@ body:has(#homeView:not([hidden])) #navHome,body:has(#propertiesView:not([hidden]
 </section></main>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script type="module" src="app.js?v=2621"></script>
+<script type="module" src="app.js?v=2631"></script>
 </body></html>

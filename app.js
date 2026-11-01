@@ -1979,15 +1979,15 @@ const pagosY = 1140;
 let cleanPreview = null;
 const cleanCollections = ['opportunities','activities','prospects'];
 async function deleteSingleCommercial(name,id,reload){
- if(!['opportunities','activities'].includes(name)||!current||profile?.status!=='active')return;
+ if(!['opportunities','activities'].includes(name)||!adminOnly())return msg('Esta versión limita las eliminaciones a administradores.');
  const ref=doc(db,name,id),snapshot=await getDoc(ref);
  if(!snapshot.exists())return msg('El registro ya no existe.');
- if(snapshot.data().ownerUid!==current.uid && !adminOnly())return msg('Solo puedes eliminar registros propios.');
+ if(!adminOnly())return msg('Solo el administrador puede eliminar registros.');
  if(!confirm('¿Eliminar definitivamente este registro? Esta acción no se puede deshacer.'))return;
  try{await deleteDoc(ref);msg('Registro eliminado.');await reload()}catch(e){msg('No se pudo eliminar. Verifica permisos de Firestore: '+e.message)}
 }
 async function deleteSingleProspect(id){
- if(!current||profile?.status!=='active')return;
+ if(!adminOnly())return msg('Solo el administrador puede eliminar prospectos.');
  try{
   const [p,acts,opps]=await Promise.all([
    getDoc(doc(db,'prospects',id)),
@@ -2005,7 +2005,7 @@ const cleanSelected=()=>cleanCollections.filter(c=>document.querySelector(`[data
 function resetCleanPreview(){cleanPreview=null;$('cleanupSummary').textContent='Selección modificada. Consulta nuevamente los registros.';$('cleanupExecute').disabled=true;}
 document.querySelectorAll('[data-clean-collection]').forEach(el=>el.addEventListener('change',resetCleanPreview));
 for(const id of ['cleanupPhrase','cleanupBackupDone'])$(id).addEventListener('input',()=>{
- $('cleanupExecute').disabled=!(cleanPreview&&$('cleanupBackupDone').checked&&$('cleanupPhrase').value==='ELIMINAR');
+ $('cleanupExecute').disabled=true;
 });
 $('cleanupPreview').onclick=async()=>{
  if(!adminOnly())return msg('Solo administrador.');
@@ -2026,11 +2026,12 @@ $('cleanupPreview').onclick=async()=>{
   if(entries.reduce((n,e)=>n+e.ids.length,0)>450)return $('cleanupSummary').textContent='Hay más de 450 documentos. La depuración está bloqueada para evitar borrados parciales; requiere planificación separada.';
   cleanPreview={entries,uid:current.uid,selected:selected.join('|')};
   $('cleanupSummary').textContent=entries.map(e=>`${e.name}: ${e.ids.length}`).join(' · ')+'. Total: '+entries.reduce((n,e)=>n+e.ids.length,0)+' documentos. Confirma respaldo y escribe ELIMINAR.';
-  $('cleanupExecute').disabled=!(cleanPreview&&$('cleanupBackupDone').checked&&$('cleanupPhrase').value==='ELIMINAR');
+  $('cleanupExecute').disabled=true;
  }catch(e){$('cleanupSummary').textContent='No se pudo consultar la selección: '+e.message}
  finally{$('cleanupPreview').disabled=false}
 };
 $('cleanupExecute').onclick=async()=>{
+ return msg('Depuración masiva deshabilitada en esta versión de seguridad.');
  if(!adminOnly()||!cleanPreview||cleanPreview.uid!==current.uid||cleanPreview.selected!==cleanSelected().join('|')||!$('cleanupBackupDone').checked||$('cleanupPhrase').value!=='ELIMINAR')return;
  // Se vuelve a leer antes de borrar: si hubo cambios, se exige previsualizar de nuevo.
  const items=cleanPreview.entries;const count=items.reduce((n,e)=>n+e.ids.length,0);

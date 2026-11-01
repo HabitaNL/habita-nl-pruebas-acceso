@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HABITA NL · v2.6.3 (Pruebas)</title><style>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HABITA NL · v2.6.4 (Pruebas)</title><style>
 :root{font-family:Arial,sans-serif;background:#f3f6fa;color:#142b44}*{box-sizing:border-box}body{margin:0}header{background:#102e52;color:#fff;padding:20px 5%;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}main{max-width:1100px;margin:25px auto;padding:0 18px}.card{background:white;border:1px solid #d9e2eb;border-radius:12px;padding:22px;margin:15px 0}h1{font-size:22px;margin:0}h2{margin-top:0}p{line-height:1.5}.muted{color:#5e6c7c;font-size:14px}button{border:0;border-radius:7px;background:#145c9c;color:white;padding:11px 14px;cursor:pointer;margin:4px 4px 4px 0}button.secondary{background:#e8eff7;color:#123957}button:disabled{opacity:.45;cursor:not-allowed}input,select,textarea{padding:10px;border:1px solid #bfcdd9;border-radius:7px;width:100%;margin:5px 0 12px;font:inherit}label{font-size:13px;font-weight:bold}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e4eaf0;padding:10px;text-align:left;font-size:14px}section[hidden]{display:none}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.stat{background:#f2f6fb;padding:16px;border-radius:8px}.stat strong{display:block;font-size:27px;margin-top:8px}#message{padding:12px;background:#eaf2ff;border-radius:8px;margin:15px 0;white-space:pre-wrap}.danger{color:#ad3333}.flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.scroll{overflow:auto}a{color:#145c9c}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 
 /* HABITA NL v1.0 - diseño adaptable, sin cambios en Firebase */
@@ -223,6 +223,47 @@ body:has(#homeView:not([hidden])) #navHome,body:has(#propertiesView:not([hidden]
 #funnelView #funnelStages{padding:17px;border:1px solid #e1eaf3;border-radius:13px;background:#fcfdff}
 @media(max-width:760px){:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView){padding:17px 14px!important}:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) form{padding:15px}:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView)>h2:before{width:36px;height:36px;font-size:18px}}
 @media(max-width:480px){#agendaView>.grid:has(#agendaFilter){grid-template-columns:1fr}:where(#prospectsView,#agendaView,#opportunitiesView,#funnelView) .stat{padding:13px}}
+
+/* HABITA NL v2.6.4 | Presentación visual aislada: Facebook, Respaldos, Equipo. */
+:where(#facebookView,#backupView,#requestsView){--hn-line:#dce7f0;--hn-soft:#f5f9fd;padding:28px!important}
+:where(#facebookView,#backupView,#requestsView)>h2{display:flex;align-items:center;gap:12px;font-size:clamp(22px,2.4vw,29px);letter-spacing:-.025em;color:#163b5b;margin:0 0 12px;line-height:1.25}
+:where(#facebookView,#backupView,#requestsView)>h2:before{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:12px;background:#eaf3fb;color:#1763a0;font-size:22px}
+#facebookView>h2:before{content:"▣"}#backupView>h2:before{content:"⇩"}#requestsView>h2:before{content:"♙"}
+:where(#facebookView,#backupView,#requestsView)>p:first-of-type{background:#fffaf5;border-left:3px solid #f28c28;border-radius:0 9px 9px 0;padding:11px 14px;color:#526d82;line-height:1.65}
+:where(#facebookView,#backupView,#requestsView) h3{color:#214968;font-size:17px;letter-spacing:-.01em;margin-top:27px;margin-bottom:14px;padding-bottom:11px;border-bottom:1px solid var(--hn-line)}
+:where(#facebookView,#backupView,#requestsView) input:not([type=checkbox]),:where(#facebookView,#backupView,#requestsView) select,:where(#facebookView,#backupView,#requestsView) textarea{border:1px solid #d3e0eb;border-radius:9px;background:#fff;max-width:100%}
+:where(#facebookView,#backupView,#requestsView) label{color:#365a76;font-size:12px;line-height:1.5}
+:where(#facebookView,#backupView,#requestsView) button{border-radius:9px;font-weight:650;max-width:100%}
+:where(#facebookView,#backupView,#requestsView) button:hover:not(:disabled){filter:brightness(.96)}
+:where(#facebookView,#backupView,#requestsView) button:focus-visible{outline:3px solid #f28c28;outline-offset:2px}
+#facebookView :is(#facebookGroupForm,#facebookPublicationForm){padding:20px;background:#f9fcff;border:1px solid var(--hn-line);border-radius:14px;gap:14px;align-items:start;margin-bottom:12px}
+#facebookView :is(#facebookGroupForm,#facebookPublicationForm)>div:has(button[type=submit]){grid-column:1/-1;border-top:1px solid #e0eaf3;padding-top:12px}
+#facebookView :is(#facebookGroupForm,#facebookPublicationForm) button[type=submit]{background:#e98526;font-weight:700}
+#facebookView :is(#facebookGroupList,#facebookPublicationSummary){border:1px solid #e1ebf3;border-radius:12px;padding:14px;background:#fafcff;margin:12px 0;max-width:100%;overflow-x:auto}
+#facebookView #facebookGroupFilterSummary{font-size:12px;color:#57738b}
+#facebookView div:has(>table){border:1px solid var(--hn-line);border-radius:12px;margin-top:12px;max-width:100%;box-shadow:0 4px 14px #12375708}
+#facebookView table{min-width:640px}#facebookView th{background:#eaf2f9;color:#294f6f;font-size:11px;letter-spacing:.045em;text-transform:uppercase;padding:14px 12px}#facebookView td{padding:12px;vertical-align:middle}
+#facebookView tbody tr:nth-child(even){background:#fbfdff}
+#facebookView #facebookPropertyGenerator{margin-top:22px;padding:21px;background:#f7fafd;border:1px solid var(--hn-line);border-radius:15px}
+#facebookView #facebookPropertyPreview{border-color:#d9e7f2;box-shadow:0 8px 22px #1237570d}
+#facebookView :is(#facebookGroupStatus,#facebookPublicationStatus,#facebookPublicationSummary){line-height:1.55}
+#backupView>p.muted{padding:12px 15px;border:1px solid #dae7f2;background:#f7faff;border-radius:10px;line-height:1.55}
+#backupView>p.muted:nth-of-type(2){border-left:4px solid #f28c28;background:#fffaf4}
+#backupView>label:has(#backupAcknowledgement){background:#f3f8fd;border:1px solid var(--hn-line);border-radius:11px;padding:12px 14px;margin:17px 0 12px;max-width:780px;line-height:1.55}
+#backupView #backupAcknowledgement{flex:none;width:18px;height:18px;margin:2px 0 0;accent-color:#1763a0}
+#backupView :is(#downloadFirestoreBackup,#downloadPhotosBackup){padding:13px 18px;background:#1763a0;font-weight:700;min-height:46px}
+#backupView :is(#backupStatus,#photosBackupStatus){background:#f4f8fc;border:1px solid var(--hn-line);border-radius:10px;padding:12px 15px;margin:12px 0 24px;max-width:780px;overflow-wrap:anywhere}
+#backupView hr{border-color:#e0eaf3!important;margin:28px 0!important}
+#requestsView #adminPanel{padding:22px;background:#f9fcff;border:1px solid var(--hn-line);border-radius:15px}
+#requestsView #adminPanel>label{display:block;margin-top:5px}
+#requestsView #adminPanel>input,#requestsView #adminPanel>select{max-width:520px;display:block}
+#requestsView #inviteButton{display:block;background:#e98526;font-weight:700;padding:12px 17px}
+#requestsView :is(#requestRows,#userRows){padding:12px;border-radius:12px;background:white;border:1px solid #e1ebf3;overflow-x:auto;max-width:100%;min-height:48px}
+#requestsView :is(#requestRows,#userRows) table{min-width:560px}
+#requestsView :is(#requestRows,#userRows) th{background:#eaf2f9;text-transform:uppercase;font-size:11px;letter-spacing:.04em;color:#2b526f}
+#requestsView :is(#requestRows,#userRows) td{vertical-align:middle}
+@media(max-width:760px){:where(#facebookView,#backupView,#requestsView){padding:17px 14px!important}#facebookView :is(#facebookGroupForm,#facebookPublicationForm),#requestsView #adminPanel{padding:14px}#facebookView #facebookPropertyGenerator{padding:14px}:where(#facebookView,#backupView,#requestsView)>h2:before{width:37px;height:37px;font-size:19px}}
+@media(max-width:480px){#backupView :is(#downloadFirestoreBackup,#downloadPhotosBackup){width:100%;white-space:normal}#facebookView :is(#facebookGroupForm,#facebookPublicationForm){grid-template-columns:1fr}}
 </style></head>
 <body>
 <header>
@@ -234,7 +275,7 @@ body:has(#homeView:not([hidden])) #navHome,body:has(#propertiesView:not([hidden]
     >
     <div>
       <h1>HABITA NL</h1>
-      <small>v2.6.3 (Pruebas)</small>
+      <small>v2.6.4 (Pruebas)</small>
     </div>
   </div>
   <div id="who">Sin iniciar sesión</div>
@@ -609,5 +650,5 @@ body:has(#homeView:not([hidden])) #navHome,body:has(#propertiesView:not([hidden]
 </section></main>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script type="module" src="app.js?v=2631"></script>
+<script type="module" src="app.js?v=2641"></script>
 </body></html>

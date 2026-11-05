@@ -1006,12 +1006,21 @@ function refreshDuplicateWarnings() {
 for(const formId of ['propertyForm','editPropertyForm']) $(formId).addEventListener('input',refreshDuplicateWarnings);
 
 function renderAdminProperties(){if(!adminOnly())return;
-const term=$('propertySearch').value.toLowerCase(),archived=$('showArchived').checked,status=$('propertyStatusFilter').value;
-const rows=properties.filter(p=>Boolean(p.archived)===archived&&(!status||p.status===status)&&[p.title,p.municipality,p.colony].some(x=>String(x||'').toLowerCase().includes(term)));
-$('adminPropertyRows').innerHTML=rows.map(p=>`<div class="card"><strong>${escape(p.title)}</strong> · ${escape(p.municipality)} · ${Number(p.price).toLocaleString('es-MX',{style:'currency',currency:'MXN'})} · ${escape(p.status)}<div class="flex"><button class="gallery-open" data-id="${escape(p.id)}">Fotografías (${(p.photos||[]).length})</button>${p.archived?`<button class="restore" data-id="${escape(p.id)}">Restaurar</button><button class="hardDelete secondary" data-id="${escape(p.id)}">Eliminar definitivamente</button>`:`<button class="edit" data-id="${escape(p.id)}">Editar</button><button class="archive secondary" data-id="${escape(p.id)}">Enviar a papelera</button>`}</div></div>`).join('')||'<p>No hay propiedades en esta vista.</p>';
-$('adminPropertyRows').querySelectorAll('.gallery-open').forEach(b=>b.onclick=()=>openGallery(b.dataset.id));
-for(const [cls,fn] of [['edit',startEdit],['archive',archiveProperty],['restore',restoreProperty],['hardDelete',hardDeleteProperty]])$('adminPropertyRows').querySelectorAll('.'+cls).forEach(b=>b.onclick=()=>fn(b.dataset.id));}
-for(const id of ['propertySearch','propertyStatusFilter','showArchived'])$(id).addEventListener('input',renderAdminProperties);
+const term=$('propertySearch').value.toLowerCase(),status=$('propertyStatusFilter').value;
+const matches=p=>(!status||p.status===status)&&[p.title,p.municipality,p.colony].some(x=>String(x||'').toLowerCase().includes(term));
+const activeRows=properties.filter(p=>!p.archived&&matches(p));
+const trashRows=properties.filter(p=>Boolean(p.archived)&&matches(p));
+const renderRow=p=>`<div class="card"><strong>${escape(p.title)}</strong> · ${escape(p.municipality)} · ${Number(p.price).toLocaleString('es-MX',{style:'currency',currency:'MXN'})} · ${escape(p.status)}<div class="flex"><button class="gallery-open" data-id="${escape(p.id)}">Fotografías (${(p.photos||[]).length})</button>${p.archived?`<button class="restore" data-id="${escape(p.id)}">Restaurar</button><button class="hardDelete secondary" data-id="${escape(p.id)}">Eliminar definitivamente</button>`:`<button class="edit" data-id="${escape(p.id)}">Editar</button><button class="archive secondary" data-id="${escape(p.id)}">Enviar a papelera</button>`}</div></div>`;
+$('adminPropertyRows').innerHTML=activeRows.map(renderRow).join('')||'<p>No hay propiedades activas con estos filtros.</p>';
+$('trashPropertyRows').innerHTML=trashRows.map(renderRow).join('')||'<p>No hay propiedades archivadas con estos filtros.</p>';
+$('trashPropertyCount').textContent=String(trashRows.length);
+for(const containerId of ['adminPropertyRows','trashPropertyRows']){
+ const container=$(containerId);
+ container.querySelectorAll('.gallery-open').forEach(b=>b.onclick=()=>openGallery(b.dataset.id));
+ for(const [cls,fn] of [['edit',startEdit],['archive',archiveProperty],['restore',restoreProperty],['hardDelete',hardDeleteProperty]])container.querySelectorAll('.'+cls).forEach(b=>b.onclick=()=>fn(b.dataset.id));
+}
+}
+for(const id of ['propertySearch','propertyStatusFilter'])$(id).addEventListener('input',renderAdminProperties);
 function startEdit(id){
  if(!adminOnly())return;
  const p=properties.find(x=>x.id===id&&!x.archived);if(!p)return;

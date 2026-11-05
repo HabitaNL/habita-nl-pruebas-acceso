@@ -1127,8 +1127,17 @@ function inventoryMatches(p){
    &&(!$('invBaths').value||Number(p.baths)>=Number($('invBaths').value))
    &&(!pay||(p.payments||[]).some(value=>norm(value)===norm(pay)));
 }
+// Orden visual: inmobiliaria A-Z, municipio A-Z y precio ascendente.
+// La comparación solo ordena una copia en memoria; no modifica Firestore.
+const inventoryAlphabetical=(a,b)=>String(a||'').trim().localeCompare(String(b||'').trim(),'es-MX',{sensitivity:'base',numeric:true});
+function compareInventoryCards(a,b){
+  return inventoryAlphabetical(a.agency,b.agency)
+    || inventoryAlphabetical(a.municipality,b.municipality)
+    || (Number(a.price||0)-Number(b.price||0))
+    || inventoryAlphabetical(a.id,b.id);
+}
 function renderInventory(){
-  const list=properties.filter(inventoryMatches);
+  const list=properties.filter(inventoryMatches).sort(compareInventoryCards);
   $('invCount').textContent=`${list.length} de ${properties.filter(p=>!p.archived).length} propiedades`;
   const cards=$('inventoryCards'),table=$('inventoryTable');
   cards.hidden=inventoryDisplayMode!=='cards';table.hidden=inventoryDisplayMode!=='table';
@@ -1141,7 +1150,7 @@ function renderInventory(){
     const first=(Array.isArray(p.photos)?p.photos:[]).find(ph=>{try{const u=new URL(ph?.url);return u.protocol==='https:'}catch{return false}});
     const photo=first?`<img src="${escape(first.url)}" alt="Fotografía de ${escape(p.title||'propiedad')}" loading="lazy">`:'Sin fotografía';
     const money=Number(p.price||0).toLocaleString('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:0});
-    return `<article class="inventory-card"><div class="inventory-photo">${photo}</div><div class="inventory-card-body"><span class="inventory-code">${escape(inventoryCode(p))}</span> <button class="secondary inventory-copy" type="button" data-inv-copy="${escape(p.id)}" aria-label="Copiar referencia de propiedad">Copiar ID</button><h3>${escape(p.title||'Propiedad')}</h3><p class="inventory-price">${escape(money)}</p><div class="inventory-meta">${escape([p.colony,p.municipality].filter(Boolean).join(', '))}<br>${escape(p.beds??'N/D')} habitaciones · ${escape(p.baths??'N/D')} baños<br>Estado: ${escape(p.status||'Sin especificar')}<br>${escape(p.propertyType||'')}</div><button class="secondary" type="button" data-inv-gallery="${escape(p.id)}">Ver fotografías</button></div></article>`;
+    return `<article class="inventory-card"><div class="inventory-photo">${photo}</div><div class="inventory-card-body"><span class="inventory-code">${escape(inventoryCode(p))}</span> <button class="secondary inventory-copy" type="button" data-inv-copy="${escape(p.id)}" aria-label="Copiar referencia de propiedad">Copiar ID</button><h3>${escape(p.title||'Propiedad')}</h3><p class="inventory-agency"><strong>Inmobiliaria:</strong> ${escape(p.agency||'Sin especificar')}</p><p class="inventory-price">${escape(money)}</p><div class="inventory-meta">${escape([p.colony,p.municipality].filter(Boolean).join(', '))}<br>${escape(p.beds??'N/D')} habitaciones · ${escape(p.baths??'N/D')} baños<br>Estado: ${escape(p.status||'Sin especificar')}<br>${escape(p.propertyType||'')}</div><button class="secondary" type="button" data-inv-gallery="${escape(p.id)}">Ver fotografías</button></div></article>`;
   }).join('')||'<p class="muted">No hay propiedades que coincidan con los filtros.</p>';
   cards.querySelectorAll('[data-inv-gallery]').forEach(b=>b.onclick=()=>openGallery(b.dataset.invGallery));
   cards.querySelectorAll('[data-inv-copy]').forEach(b=>b.onclick=async()=>{const p=properties.find(x=>x.id===b.dataset.invCopy);if(!p)return;const code=inventoryCode(p);try{await navigator.clipboard.writeText(code);msg('Referencia copiada: '+code)}catch(e){msg('No se pudo copiar. Referencia: '+code)}});

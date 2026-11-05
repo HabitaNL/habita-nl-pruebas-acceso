@@ -1012,6 +1012,7 @@ const activeRows=properties.filter(p=>!p.archived&&matches(p));
 const trashRows=properties.filter(p=>Boolean(p.archived)&&matches(p));
 const renderRow=p=>`<div class="card"><strong>${escape(p.title)}</strong> · ${escape(p.municipality)} · ${Number(p.price).toLocaleString('es-MX',{style:'currency',currency:'MXN'})} · ${escape(p.status)}<div class="flex"><button class="gallery-open" data-id="${escape(p.id)}">Fotografías (${(p.photos||[]).length})</button>${p.archived?`<button class="restore" data-id="${escape(p.id)}">Restaurar</button><button class="hardDelete secondary" data-id="${escape(p.id)}">Eliminar definitivamente</button>`:`<button class="edit" data-id="${escape(p.id)}">Editar</button><button class="archive secondary" data-id="${escape(p.id)}">Enviar a papelera</button>`}</div></div>`;
 $('adminPropertyRows').innerHTML=activeRows.map(renderRow).join('')||'<p>No hay propiedades activas con estos filtros.</p>';
+$('activePropertyCount').textContent=String(activeRows.length);
 $('trashPropertyRows').innerHTML=trashRows.map(renderRow).join('')||'<p>No hay propiedades archivadas con estos filtros.</p>';
 $('trashPropertyCount').textContent=String(trashRows.length);
 for(const containerId of ['adminPropertyRows','trashPropertyRows']){

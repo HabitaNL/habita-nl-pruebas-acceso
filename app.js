@@ -400,6 +400,21 @@ function renderFacebookGroups() {
     card.append(title, details, link);
     
     if (isAdministrator) {
+  if (group.status === 'Pendiente') {
+    const activateButton = document.createElement('button');
+    activateButton.type = 'button';
+    activateButton.textContent = 'Activar tras verificar';
+    activateButton.style.cssText = 'margin:10px 8px 0 0;background:#12689a;color:white';
+    activateButton.onclick = async () => {
+      if (!confirm('¿Confirmas que revisaste el enlace, las reglas del grupo y su pertinencia?\n\nEl grupo será visible para los asesores.')) return;
+      activateButton.disabled = true;
+      try {
+        await updateDoc(doc(db, 'groups', group.id), {status:'Activo'});
+        await loadFacebookGroups();
+      } catch (e) {msg('No se pudo activar el grupo: '+e.message);activateButton.disabled=false;}
+    };
+    card.appendChild(activateButton);
+  }
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
   deleteButton.textContent = 'Eliminar grupo';
@@ -583,6 +598,114 @@ $('facebookExportGroups').onclick = () => {
   );
 
   msg(`${groups.length} grupo(s) exportado(s) a Excel.`);
+};
+
+
+// v2.6.6.1: Importador controlado (sin escrituras durante la vista previa).
+let facebookImportPlan = null;
+const facebookImportFile = $('facebookGroupImportFile');
+const facebookImportPreview = $('facebookGroupImportPreview');
+const facebookImportStatus = $('facebookGroupImportStatus');
+const facebookImportCommit = $('facebookGroupImportCommit');
+const facebookImportCancel = $('facebookGroupImportCancel');
+function facebookUrlKey(value){
+  try{
+    const u=new URL(String(value||'').trim());
+    if(u.protocol!=='https:' || !['facebook.com','www.facebook.com','m.facebook.com','web.facebook.com'].includes(u.hostname))return null;
+    const match=u.pathname.match(/^\/groups\/([a-zA-Z0-9._-]+)\/?$/);
+    return match ? match[1].toLowerCase() : null;
+  }catch{return null;}
+}
+function clearFacebookImport(){
+  facebookImportPlan=null;
+  facebookImportCommit.disabled=true;
+  facebookImportCancel.disabled=true;
+  facebookImportFile.value='';
+  facebookImportPreview.textContent='Selecciona el archivo para revisar los registros antes de importarlos.';
+}
+facebookImportCancel.onclick=()=>{clearFacebookImport();facebookImportStatus.textContent='Vista previa cancelada. No se guardaron grupos.';};
+facebookImportFile.onchange=async()=>{
+  facebookImportPlan=null;
+  facebookImportCommit.disabled=true;
+  facebookImportCancel.disabled=true;
+  facebookImportStatus.textContent='';
+  if(profile?.role!=='admin')return;
+  const file=facebookImportFile.files?.[0];if(!file)return;
+  if(file.size>5*1024*1024){facebookImportPreview.textContent='Archivo demasiado grande (máximo 5 MB).';return;}
+  if(!/\.xlsx?$/i.test(file.name)){facebookImportPreview.textContent='Selecciona un archivo .xlsx o .xls.';return;}
+  if(typeof XLSX==='undefined'){facebookImportPreview.textContent='No se pudo cargar el lector de Excel.';return;}
+  try{
+    facebookImportPreview.textContent='Leyendo Excel y revisando duplicados...';
+    const fileData=await file.arrayBuffer();
+    const workbook=XLSX.read(fileData,{type:'array'});
+    const worksheet=workbook.Sheets['Grupos'];
+    if(!worksheet)throw Error('El Excel no contiene la hoja "Grupos".');
+    const rows=XLSX.utils.sheet_to_json(worksheet,{defval:'',raw:false});
+    const expected=['Nombre limpio','URL','Municipio / zona','Tipo de grupo','Prioridad HABITA NL','Uso recomendado'];
+    if(!rows.length || expected.some(key=>!(key in rows[0])))throw Error('El formato del Excel no coincide con el catálogo HABITA NL.');
+    // Consulta la base actual para detectar duplicados, incluso si otro asesor registró un grupo.
+    const existing=await getDocs(collection(db,'groups'));
+    const existingKeys=new Set(existing.docs.map(d=>facebookUrlKey(d.data().url)).filter(Boolean));
+    const seen=new Set(), pending=[], problems=[];
+    let duplicates=0;
+    rows.forEach((r,i)=>{
+      const id=facebookUrlKey(r.URL);
+      const name=String(r['Nombre limpio']||r['Nombre original']||'').trim().slice(0,150);
+      const municipality=String(r['Municipio / zona']||'').trim().slice(0,150);
+      if(!id||!name||!municipality){problems.push(i+2);return;}
+      if(existingKeys.has(id)||seen.has(id)){duplicates++;return;}
+      seen.add(id);
+      const category=String(r['Tipo de grupo']||'').trim();
+      const priority=String(r['Prioridad HABITA NL']||'').trim();
+      const use=String(r['Uso recomendado']||'').trim();
+      const subzone=String(r['Subzona detectada']||'').trim();
+      const rules=`[Importado de catálogo HABITA NL] Categoría: ${category || 'Sin clasificar'}; Prioridad: ${priority || 'No indicada'}; Uso: ${use || 'No indicado'}; Subzona: ${subzone || 'No indicada'}. Visibilidad público/privado y miembros: NO verificados.`.slice(0,2000);
+      pending.push({name,municipality,url:`https://www.facebook.com/groups/${id}/`,groupType:'Publico',members:0,rules,status:'Pendiente',ownerUid:current.uid,createdAt:serverTimestamp()});
+    });
+    facebookImportPlan={rows:pending,sourceCount:rows.length,duplicates,problems,uid:current.uid};
+    facebookImportPreview.replaceChildren();
+    const text=document.createElement('p');
+    text.textContent=`Filas: ${rows.length} · Nuevos: ${pending.length} · Duplicados: ${duplicates} · Inválidos: ${problems.length}.`;
+    facebookImportPreview.appendChild(text);
+    const disclaimer=document.createElement('p');
+    disclaimer.textContent='Importación pendiente: grupoType Público y 0 miembros son valores técnicos provisionales exigidos por el esquema existente; NO significan que esos datos estén verificados. Los grupos no serán visibles para asesores hasta activarlos individualmente.';
+    facebookImportPreview.appendChild(disclaimer);
+    if(problems.length){const t=document.createElement('p');t.textContent=`Filas inválidas (primeras 12): ${problems.slice(0,12).join(', ')}.`;facebookImportPreview.appendChild(t);}
+    const table=document.createElement('table');table.style.cssText='width:100%;min-width:0;font-size:12px';
+    const head=document.createElement('tr');for(const x of ['Nombre','Municipio','URL']){const th=document.createElement('th');th.textContent=x;head.appendChild(th);}table.appendChild(head);
+    pending.slice(0,8).forEach(g=>{const tr=document.createElement('tr');for(const x of [g.name,g.municipality,g.url]){const td=document.createElement('td');td.textContent=x;td.style.wordBreak='break-word';tr.appendChild(td);}table.appendChild(tr);});
+    facebookImportPreview.appendChild(table);
+    facebookImportCommit.disabled=pending.length===0;
+    facebookImportCancel.disabled=false;
+    facebookImportStatus.textContent='Vista previa lista. No se han guardado registros.';
+  }catch(e){facebookImportPreview.textContent='No se pudo preparar la importación: '+e.message;}
+};
+facebookImportCommit.onclick=async()=>{
+  const plan=facebookImportPlan;
+  if(profile?.role!=='admin'||!plan||!plan.rows.length||plan.uid!==current?.uid)return;
+  if(!confirm(`Se agregarán ${plan.rows.length} grupos como PENDIENTES al catálogo COMPARTIDO de HABITA NL.\n\nEsta operación escribe registros reales en Firebase, incluso desde pruebas.\n\n¿Confirmas la importación?`))return;
+  facebookImportCommit.disabled=true;
+  facebookImportFile.disabled=true;
+  facebookImportCancel.disabled=true;
+  let created=0, skipped=0, failed=0;
+  try{
+    // Reconsultar antes de escribir para evitar duplicados si otro administrador registró grupos.
+    const snapshot=await getDocs(collection(db,'groups'));
+    const present=new Set(snapshot.docs.map(d=>facebookUrlKey(d.data().url)).filter(Boolean));
+    for(const group of plan.rows){
+      const key=facebookUrlKey(group.url);
+      if(present.has(key)){skipped++;continue;}
+      try{
+        await addDoc(collection(db,'groups'),group);
+        present.add(key);
+        created++;
+      }catch(e){failed++;console.error('Error importando grupo:',group.url,e);}
+      facebookImportStatus.textContent=`Importación: ${created} guardados, ${skipped} omitidos, ${failed} errores. Progreso: ${created+skipped+failed}/${plan.rows.length}.`;
+    }
+    facebookImportStatus.textContent=`Finalizado: ${created} guardados como Pendientes, ${skipped} omitidos y ${failed} errores. ${failed?'Puedes volver a importar el archivo para reintentar sin duplicados.':'Revisa los grupos antes de activarlos.'}`;
+    await loadFacebookGroups();
+    clearFacebookImport();
+  }finally{facebookImportFile.disabled=false;facebookImportCommit.disabled=true;facebookImportCancel.disabled=true;}
 };
 
 $('facebookGroupForm').onsubmit=async e=>{

@@ -329,126 +329,140 @@ const enlace = 'https://web.whatsapp.com/send?text='
 }
 
 
+// v2.6.6.2 - Administración de grupos. Solo lectura hasta la acción individual confirmada.
 let facebookGroupsCache = [];
-
+let facebookGroupsPage = 1;
+const FACEBOOK_GROUPS_PAGE_SIZE = 15;
+function facebookNormalized(value) {
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('es-MX');
+}
+function facebookPriority(group) {
+  const match = String(group.rules || '').match(/(?:^|[;\s])Prioridad\s*:\s*([^;.]+)/i);
+  const value = facebookNormalized(match?.[1]);
+  return value === 'alta' ? 'Alta' : value === 'media' ? 'Media' : value === 'baja' ? 'Baja' : 'Sin clasificar';
+}
 function renderFacebookGroups() {
   const container = $('facebookGroupList');
   const selector = $('facebookGroupMunicipalityFilter');
   const summary = $('facebookGroupFilterSummary');
-
   if (!container || !selector || !summary) return;
-
-  const municipio = selector.value.trim().toLocaleLowerCase('es-MX');
-
-  const groups = facebookGroupsCache.filter(group =>
-    !municipio ||
-    String(group.municipality || '')
-      .trim()
-      .toLocaleLowerCase('es-MX') === municipio
-  );
-
-  summary.textContent =
-    `${groups.length} grupo(s) encontrado(s).`;
-
-  container.replaceChildren();
-
-  if (!groups.length) {
-    container.textContent =
-      'No hay grupos registrados para este municipio.';
-    return;
-  }
-
   const isAdministrator = profile?.role === 'admin';
-
-  for (const group of groups) {
+  if ($('facebookAdminStatusFilter')) $('facebookAdminStatusFilter').hidden = !isAdministrator;
+  if ($('facebookAdminPriorityFilter')) $('facebookAdminPriorityFilter').hidden = !isAdministrator;
+  const municipality = facebookNormalized(selector.value);
+  const searchText = facebookNormalized($('facebookGroupSearch')?.value);
+  const state = isAdministrator ? String($('facebookGroupStatusFilter')?.value || '') : '';
+  const priority = isAdministrator ? String($('facebookGroupPriorityFilter')?.value || '') : '';
+  const groups = facebookGroupsCache.filter(group => {
+    if (municipality && facebookNormalized(group.municipality) !== municipality) return false;
+    if (state && (group.status || 'Sin estado') !== state) return false;
+    if (priority && facebookPriority(group) !== priority) return false;
+    if (searchText && !facebookNormalized([group.name, group.municipality, group.url, group.rules].join(' ')).includes(searchText)) return false;
+    return true;
+  });
+  const counts = isAdministrator ? ['Pendiente','Activo','Inactivo','Papelera'].map(key => `${key}: ${facebookGroupsCache.filter(g => g.status === key).length}`).join(' · ') : '';
+  const pages = Math.max(1, Math.ceil(groups.length / FACEBOOK_GROUPS_PAGE_SIZE));
+  facebookGroupsPage = Math.min(Math.max(facebookGroupsPage, 1), pages);
+  const from = groups.length ? (facebookGroupsPage - 1) * FACEBOOK_GROUPS_PAGE_SIZE : 0;
+  const to = Math.min(from + FACEBOOK_GROUPS_PAGE_SIZE, groups.length);
+  summary.textContent = `${groups.length} de ${facebookGroupsCache.length} grupo(s) · ${groups.length ? `mostrando ${from + 1}–${to}` : 'sin coincidencias'}. ${counts}`;
+  container.replaceChildren();
+  if (!groups.length) {
+    container.textContent = 'No hay grupos que coincidan con los filtros.';
+  }
+  for (const group of groups.slice(from, to)) {
     const card = document.createElement('div');
     card.className = 'card';
-
+    card.style.cssText = 'padding:14px;margin-bottom:10px;';
     const title = document.createElement('h3');
     title.textContent = group.name || 'Grupo sin nombre';
-
     const details = document.createElement('p');
-    details.textContent = [
-      group.municipality || 'Sin municipio',
-      group.groupType || 'Sin tipo',
-      `${Number(group.members || 0).toLocaleString('es-MX')} miembros`,
-      ...(isAdministrator ? [group.status || 'Sin estado'] : [])
-    ].join(' · ');
-
+    details.className = 'muted';
+    const membersLabel = Number(group.members || 0) === 0 && String(group.rules || '').includes('NO verificados') ? 'Miembros sin verificar' : `${Number(group.members || 0).toLocaleString('es-MX')} miembros`;
+    details.textContent = [group.municipality || 'Sin municipio', membersLabel, ...(isAdministrator ? [`Prioridad: ${facebookPriority(group)}`, `Estado: ${group.status || 'Sin estado'}`] : [])].join(' · ');
     const link = document.createElement('a');
     link.textContent = 'Abrir grupo en Facebook';
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-
     try {
       const parsed = new URL(group.url);
-
-      if (
-        parsed.protocol === 'https:' &&
-        ['facebook.com', 'www.facebook.com', 'm.facebook.com']
-          .includes(parsed.hostname) &&
-        parsed.pathname.startsWith('/groups/')
-      ) {
-        link.href = parsed.href;
-      } else {
-        link.textContent = 'Enlace no válido';
-      }
-    } catch {
-      link.textContent = 'Enlace no válido';
-    }
-
-    card.append(title, details, link);
-    
+      if (parsed.protocol === 'https:' && ['facebook.com','www.facebook.com','m.facebook.com','web.facebook.com'].includes(parsed.hostname) && /^\/groups\/[^/]+\/?$/.test(parsed.pathname)) link.href = parsed.href;
+      else link.textContent = 'Enlace no válido';
+    } catch { link.textContent = 'Enlace no válido'; }
+    card.append(title,details,link);
     if (isAdministrator) {
-  if (group.status === 'Pendiente') {
-    const activateButton = document.createElement('button');
-    activateButton.type = 'button';
-    activateButton.textContent = 'Activar tras verificar';
-    activateButton.style.cssText = 'margin:10px 8px 0 0;background:#12689a;color:white';
-    activateButton.onclick = async () => {
-      if (!confirm('¿Confirmas que revisaste el enlace, las reglas del grupo y su pertinencia?\n\nEl grupo será visible para los asesores.')) return;
-      activateButton.disabled = true;
-      try {
-        await updateDoc(doc(db, 'groups', group.id), {status:'Activo'});
-        await loadFacebookGroups();
-      } catch (e) {msg('No se pudo activar el grupo: '+e.message);activateButton.disabled=false;}
-    };
-    card.appendChild(activateButton);
-  }
-  const deleteButton = document.createElement('button');
-  deleteButton.type = 'button';
-  deleteButton.textContent = 'Eliminar grupo';
-
-  deleteButton.style.cssText =
-    'background:#b91c1c;color:white;border:0;' +
-    'border-radius:6px;padding:8px 12px;' +
-    'margin-top:12px;cursor:pointer;display:block;';
-
-  deleteButton.onclick = async () => {
-    const confirmed = confirm(
-      `¿Eliminar el grupo "${group.name || 'Sin nombre'}" del CRM?\n\n` +
-      'Esta acción no se puede deshacer.'
-    );
-
-    if (!confirmed) return;
-
-    deleteButton.disabled = true;
-
-    try {
-      await deleteDoc(doc(db, 'groups', group.id));
-      await loadFacebookGroups();
-      msg('Grupo eliminado correctamente.');
-    } catch (error) {
-      msg('No se pudo eliminar el grupo: ' + error.message);
-      deleteButton.disabled = false;
+      const notes = document.createElement('details');
+      notes.style.cssText = 'margin-top:10px;white-space:pre-wrap;overflow-wrap:anywhere';
+      const notesSummary = document.createElement('summary');
+      notesSummary.textContent = 'Ver clasificación y observaciones';
+      const notesText = document.createElement('p');
+      notesText.textContent = group.rules || 'Sin observaciones';
+      notes.append(notesSummary,notesText);
+      card.appendChild(notes);
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:12px';
+      function makeStatusButton(label,status,question) {
+        const button=document.createElement('button');
+        button.type='button';button.textContent=label;button.className='secondary';
+        button.onclick=async()=>{
+          if(profile?.role!=='admin'||!current?.uid||!confirm(question))return;
+          button.disabled=true;
+          try {
+            await updateDoc(doc(db,'groups',group.id),{status});
+            msg(`Grupo actualizado a ${status}.`);
+            await loadFacebookGroups();
+          } catch(e) { msg('No se pudo modificar el grupo: '+e.message);button.disabled=false; }
+        };
+        actions.appendChild(button);
+      }
+      if(group.status==='Pendiente' || group.status==='Inactivo') {
+        makeStatusButton('Activar tras verificar','Activo',`Verifica antes de continuar:\n• Enlace y existencia del grupo\n• Reglas y permiso para publicaciones inmobiliarias\n• Pertenencia o posibilidad de ingreso del asesor\n• Tipo público/privado y miembros si están pendientes\n\n¿Confirmas que revisaste personalmente «${group.name}» y deseas hacerlo visible para asesores?`);
+      }
+      if(group.status==='Activo') {
+        makeStatusButton('Desactivar','Inactivo',`¿Desactivar «${group.name}»? Dejará de estar disponible para asesores, pero no se eliminarán sus registros.`);
+      }
+      if(group.status==='Inactivo') {
+        makeStatusButton('Volver a pendiente','Pendiente',`¿Marcar «${group.name}» como pendiente de revisión?`);
+      }
+      const deleteButton = document.createElement('button');
+      deleteButton.type='button';deleteButton.textContent='Eliminar grupo';deleteButton.className='secondary';
+      deleteButton.onclick=async()=>{
+        if(profile?.role!=='admin'||!confirm(`¿Eliminar DEFINITIVAMENTE «${group.name}» del catálogo de HABITA NL? Esta acción no se puede deshacer.`))return;
+        deleteButton.disabled=true;
+        try {await deleteDoc(doc(db,'groups',group.id));await loadFacebookGroups();msg('Grupo eliminado correctamente.');}
+        catch(e){msg('No se pudo eliminar el grupo: '+e.message);deleteButton.disabled=false;}
+      };
+      actions.appendChild(deleteButton);
+      card.appendChild(actions);
     }
-  };
-
-  card.appendChild(deleteButton);
-}
     container.appendChild(card);
   }
+  const pager=$('facebookGroupPager');
+  if(pager) {
+    pager.replaceChildren();
+    pager.hidden=groups.length<=FACEBOOK_GROUPS_PAGE_SIZE;
+    pager.style.display=pager.hidden?'none':'flex';
+    if(!pager.hidden){
+      const previous=document.createElement('button');previous.type='button';previous.className='secondary';previous.textContent='Anterior';previous.disabled=facebookGroupsPage===1;
+      const position=document.createElement('span');position.textContent=`Página ${facebookGroupsPage} de ${pages}`;position.style.alignSelf='center';
+      const next=document.createElement('button');next.type='button';next.className='secondary';next.textContent='Siguiente';next.disabled=facebookGroupsPage===pages;
+      previous.onclick=()=>{facebookGroupsPage--;renderFacebookGroups();};
+      next.onclick=()=>{facebookGroupsPage++;renderFacebookGroups();};
+      pager.append(previous,position,next);
+    }
+  }
 }
+for (const id of ['facebookGroupSearch','facebookGroupStatusFilter','facebookGroupPriorityFilter']) {
+  const control=$(id);
+  if(control)control.addEventListener(id==='facebookGroupSearch'?'input':'change',()=>{facebookGroupsPage=1;renderFacebookGroups();});
+}
+const facebookResetFilters=$('facebookGroupResetFilters');
+if(facebookResetFilters)facebookResetFilters.onclick=()=>{
+  for(const id of ['facebookGroupSearch','facebookGroupStatusFilter','facebookGroupPriorityFilter','facebookGroupMunicipalityFilter']) {
+    if($(id))$(id).value='';
+  }
+  facebookGroupsPage=1;renderFacebookGroups();
+};
 
 async function loadFacebookGroups(){
   const container=$('facebookGroupList');
@@ -512,7 +526,7 @@ async function loadFacebookGroups(){
           ? seleccionAnterior
           : '';
 
-      selector.onchange = renderFacebookGroups;
+      selector.onchange = () => {facebookGroupsPage=1;renderFacebookGroups();};
     }
 
     renderFacebookGroups();
